@@ -47,8 +47,9 @@ The project deliberately excludes Monte Carlo simulation, portfolio optimization
 
 ## 3. Screenshots
 
-> _Add a screenshot of the dashboard here before publishing (e.g. `docs/assets/dashboard.png`), then reference it:_
-> `![Dashboard](docs/assets/dashboard.png)`
+![Portfolio Backtester dashboard — Growth tab with interactive hover tooltip](docs/assets/dashboard.png)
+
+_Growth tab: portfolio vs. benchmark vs. net-invested curve, with a hover crosshair and per-series tooltip._
 
 ## 4. System Architecture
 
