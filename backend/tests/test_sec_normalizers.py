@@ -1,0 +1,27 @@
+import json
+from pathlib import Path
+
+from backend.app.sec.normalizers import (
+    first_record,
+    normalize_daily_nav_record,
+    normalize_fund_class_record,
+)
+
+
+def test_fund_class_normalizer_uses_captured_contract():
+    payload = json.loads(Path("backend/tests/fixtures/sec/contract/fund_profiles_SET.json").read_text())
+    record = first_record(payload)
+    row = normalize_fund_class_record(record)
+    assert row["proj_id"]
+    assert row["display_name"]
+    assert "fund_class_name" in row
+
+
+def test_daily_nav_normalizer_uses_captured_contract():
+    payload = json.loads(Path("backend/tests/fixtures/sec/contract/daily_nav_sample.json").read_text())
+    record = first_record(payload)
+    row = normalize_daily_nav_record(record)
+    assert row["proj_id"]
+    assert row["nav_date"]
+    assert row["nav_per_unit"] > 0
+    assert row["net_asset"] > 0

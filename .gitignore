@@ -1,0 +1,24 @@
+.DS_Store
+.env
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.superpowers/
+__pycache__/
+*.pyc
+
+frontend/node_modules/
+frontend/dist/
+frontend/tsconfig.tsbuildinfo
+
+data/runs/
+data/sec/raw/
+
+sec_open_data_portfolio_backtester.egg-info/
+
+Clean portfolio backtesting workspace/
+Clean portfolio backtesting workspace.zip
+
+app/uploads/
+app/.thumbnail

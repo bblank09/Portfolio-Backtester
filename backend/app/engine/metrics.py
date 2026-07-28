@@ -1,0 +1,97 @@
+import numpy as np
+import pandas as pd
+
+
+def annualized_return(returns: pd.Series, periods_per_year: int) -> float:
+    clean = returns.dropna()
+    if clean.empty:
+        return 0.0
+    years = len(clean) / periods_per_year
+    clean_values = clean.to_numpy(dtype=float)
+    total_return = float(np.prod(1.0 + clean_values))
+    return total_return ** (1 / years) - 1
+
+
+def annualized_volatility(returns: pd.Series, periods_per_year: int) -> float:
+    clean = returns.dropna()
+    if clean.empty:
+        return 0.0
+    return float(clean.std(ddof=0) * np.sqrt(periods_per_year))
+
+
+def downside_deviation(returns: pd.Series, periods_per_year: int, minimum_acceptable_return: float = 0.0) -> float:
+    clean = returns.dropna()
+    downside = np.minimum(clean - minimum_acceptable_return, 0)
+    return float(np.sqrt(np.mean(np.square(downside))) * np.sqrt(periods_per_year))
+
+
+def sharpe_ratio(returns: pd.Series, risk_free_rate: float, periods_per_year: int) -> float | None:
+    volatility = annualized_volatility(returns, periods_per_year)
+    if volatility == 0:
+        return None
+    return float((annualized_return(returns, periods_per_year) - risk_free_rate) / volatility)
+
+
+def sortino_ratio(returns: pd.Series, risk_free_rate: float, periods_per_year: int) -> float | None:
+    downside = downside_deviation(returns, periods_per_year)
+    if downside == 0:
+        return None
+    return float((annualized_return(returns, periods_per_year) - risk_free_rate) / downside)
+
+
+def max_drawdown(values: pd.Series) -> float:
+    clean = values.dropna()
+    if clean.empty:
+        return 0.0
+    return float((clean / clean.cummax() - 1).min())
+
+
+def drawdown_series(values: pd.Series) -> pd.Series:
+    clean = values.dropna()
+    return clean / clean.cummax() - 1
+
+
+def calmar_ratio(returns: pd.Series, values: pd.Series, periods_per_year: int) -> float | None:
+    drawdown = abs(max_drawdown(values))
+    if drawdown == 0:
+        return None
+    return float(annualized_return(returns, periods_per_year) / drawdown)
+
+
+def beta_alpha(
+    portfolio: pd.Series,
+    benchmark: pd.Series,
+    risk_free_rate: float,
+    periods_per_year: int,
+) -> tuple[float, float]:
+    aligned = pd.concat([portfolio, benchmark], axis=1).dropna()
+    aligned.columns = ["portfolio", "benchmark"]
+    variance = aligned["benchmark"].var(ddof=1)
+    beta = 0.0 if variance == 0 else float(aligned["portfolio"].cov(aligned["benchmark"]) / variance)
+    port_cagr = annualized_return(aligned["portfolio"], periods_per_year)
+    bench_cagr = annualized_return(aligned["benchmark"], periods_per_year)
+    alpha = port_cagr - (risk_free_rate + beta * (bench_cagr - risk_free_rate))
+    return beta, float(alpha)
+
+
+def tracking_error(portfolio: pd.Series, benchmark: pd.Series, periods_per_year: int) -> float:
+    aligned = pd.concat([portfolio, benchmark], axis=1).dropna()
+    if aligned.empty:
+        return 0.0
+    active_returns = aligned.iloc[:, 0] - aligned.iloc[:, 1]
+    return float(active_returns.std(ddof=0) * np.sqrt(periods_per_year))
+
+
+def information_ratio(portfolio: pd.Series, benchmark: pd.Series, periods_per_year: int) -> float | None:
+    te = tracking_error(portfolio, benchmark, periods_per_year)
+    if te == 0:
+        return None
+    active_return = annualized_return(portfolio, periods_per_year) - annualized_return(benchmark, periods_per_year)
+    return float(active_return / te)
+
+
+def correlation(portfolio: pd.Series, benchmark: pd.Series) -> float | None:
+    aligned = pd.concat([portfolio, benchmark], axis=1).dropna()
+    if len(aligned) < 2:
+        return None
+    return float(aligned.iloc[:, 0].corr(aligned.iloc[:, 1]))
