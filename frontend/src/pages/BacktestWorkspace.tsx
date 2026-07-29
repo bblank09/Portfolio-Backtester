@@ -1,12 +1,13 @@
-import { Play } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { fetchFunds, runBacktest } from "../api/client";
-import { AssumptionPanel } from "../components/AssumptionPanel";
-import { FundSelector } from "../components/FundSelector";
-import { PortfolioEditor } from "../components/PortfolioEditor";
+import { AssumptionsStep } from "../components/AssumptionsStep";
+import { ObjectiveStep } from "../components/ObjectiveStep";
+import { PortfolioStep } from "../components/PortfolioStep";
+import { RunOverlay } from "../components/RunOverlay";
 import { RunSummary } from "../components/RunSummary";
+import { Stepper } from "../components/Stepper";
 import { objectives } from "../objectives/objectives";
-import type { BacktestRequest, BacktestResult, Objective, SecFund } from "../types/backtest";
+import type { BacktestRequest, BacktestResult, Objective, SecFund, SecFundAllocation } from "../types/backtest";
 
 const initialRequest: BacktestRequest = {
   objective: "past_performance",
@@ -25,45 +26,46 @@ const initialRequest: BacktestRequest = {
 export function BacktestWorkspace() {
   const [funds, setFunds] = useState<SecFund[]>([]);
   const [request, setRequest] = useState<BacktestRequest>(initialRequest);
-  const [query, setQuery] = useState("");
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState(0);
+  const [unlockedStep, setUnlockedStep] = useState(0);
+  const [theme, setTheme] = useState<"light" | "dark">(() => (localStorage.getItem("pb-theme") === "dark" ? "dark" : "light"));
+
+  useEffect(() => {
+    document.documentElement.setAttribute("data-theme", theme);
+    localStorage.setItem("pb-theme", theme);
+  }, [theme]);
 
   useEffect(() => {
     fetchFunds()
-      .then((loadedFunds) => {
-        setFunds(loadedFunds);
-        setRequest((current) => {
-          const defaults = loadedFunds.slice(0, 2);
-          if (current.assets.length || defaults.length < 2) return current;
-          return {
-            ...current,
-            benchmark_proj_id: defaults[0].proj_id,
-            assets: defaults.map((fund) => ({
-              proj_id: fund.proj_id,
-              display_name: fund.display_name,
-              weight: 50
-            }))
-          };
-        });
-      })
+      .then((loadedFunds) => setFunds(loadedFunds))
       .catch((caught: Error) => setError(caught.message));
   }, []);
 
-  const selectedIds = request.assets.map((asset) => asset.proj_id);
-  const totalWeight = request.assets.reduce((sum, asset) => sum + asset.weight, 0);
   const activeObjective = useMemo(
     () => objectives.find((objective) => objective.id === request.objective) ?? objectives[0],
     [request.objective]
   );
+  const totalWeight = request.assets.reduce((sum, asset) => sum + asset.weight, 0);
   const validationErrors = validateRequest(request, totalWeight);
-  const canRun = validationErrors.length === 0 && !loading;
 
   function updateRequest(next: BacktestRequest | ((current: BacktestRequest) => BacktestRequest)) {
     setResult(null);
     setError("");
     setRequest(next);
+  }
+
+  function handleAssetsChange(assets: SecFundAllocation[]) {
+    updateRequest((current) => {
+      const stillHasBenchmark = assets.some((asset) => asset.proj_id === current.benchmark_proj_id);
+      return {
+        ...current,
+        assets,
+        benchmark_proj_id: stillHasBenchmark ? current.benchmark_proj_id : (assets[0]?.proj_id ?? "")
+      };
+    });
   }
 
   function applyObjective(id: Objective) {
@@ -72,16 +74,14 @@ export function BacktestWorkspace() {
     updateRequest((current) => config.apply(current));
   }
 
-  function addFund(fund: SecFund) {
-    updateRequest((current) => {
-      const nextAssets = [...current.assets, { proj_id: fund.proj_id, display_name: fund.display_name, weight: 0 }];
-      const equalWeight = Number((100 / nextAssets.length).toFixed(2));
-      return {
-        ...current,
-        benchmark_proj_id: current.benchmark_proj_id || fund.proj_id,
-        assets: nextAssets.map((asset) => ({ ...asset, weight: equalWeight }))
-      };
-    });
+  function goToStep(index: number) {
+    setCurrentStep(index);
+    window.scrollTo({ top: 0, behavior: "auto" });
+  }
+
+  function advanceTo(index: number) {
+    setUnlockedStep((current) => Math.max(current, index));
+    goToStep(index);
   }
 
   async function submit() {
@@ -90,6 +90,7 @@ export function BacktestWorkspace() {
     try {
       const response = await runBacktest(request);
       setResult(response);
+      advanceTo(3);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Backtest failed");
     } finally {
@@ -97,82 +98,65 @@ export function BacktestWorkspace() {
     }
   }
 
+  function startOver() {
+    setRequest(initialRequest);
+    setResult(null);
+    setError("");
+    setUnlockedStep(0);
+    goToStep(0);
+  }
+
   return (
-    <main className="workspace">
-      <header className="topBar">
-        <div className="topBarTitle">
-          <h1>Portfolio Backtester</h1>
-          <span className="topBarSubtitle">Historical portfolio backtesting</span>
+    <div className="shell">
+      <header className="topbar">
+        <div className="brand">
+          <div className="mark">PB</div>
+          <span>Portfolio Backtester</span>
+          <span className="tag">Historical portfolio backtesting</span>
         </div>
-        <div className="topActions">
-          {validationErrors.length ? (
-            <span className="runStatus" title={validationErrors[0]}>
-              {validationErrors.length} to fix
-            </span>
-          ) : null}
-          <button className="primaryButton" disabled={!canRun} onClick={submit} type="button">
-            <Play size={16} /> {loading ? "Running" : "Run backtest"}
-          </button>
-        </div>
+        <Stepper currentStep={currentStep} unlockedStep={unlockedStep} onStepClick={goToStep} />
+        <button className="theme-toggle" onClick={() => setTheme((current) => (current === "light" ? "dark" : "light"))} type="button">
+          Toggle theme
+        </button>
       </header>
 
-      {error ? <div className="errorBanner">{error}</div> : null}
-
-      <div className="mainGrid">
-        <div className="leftRail">
-          <section className="panel">
-            <div className="panelHeader">
-              <h2>Objective preset</h2>
-            </div>
-            <div className="objectiveGrid" aria-label="Objective presets">
-              {objectives.map((objective) => (
-                <button
-                  className={request.objective === objective.id ? "objectiveCard active" : "objectiveCard"}
-                  key={objective.id}
-                  onClick={() => applyObjective(objective.id)}
-                  type="button"
-                >
-                  <strong>{objective.label}</strong>
-                </button>
-              ))}
-            </div>
-          </section>
-          <FundSelector funds={funds} query={query} onQueryChange={setQuery} onAdd={addFund} selectedIds={selectedIds} />
-          <PortfolioEditor
-            assets={request.assets}
-            onRemove={(projId) => updateRequest((current) => {
-              const assets = current.assets.filter((asset) => asset.proj_id !== projId);
-              return {
-                ...current,
-                assets,
-                benchmark_proj_id: current.benchmark_proj_id === projId ? assets[0]?.proj_id ?? "" : current.benchmark_proj_id
-              };
-            })}
-            onWeightChange={(projId, weight) =>
-              updateRequest((current) => ({
-                ...current,
-                assets: current.assets.map((asset) => (asset.proj_id === projId ? { ...asset, weight } : asset))
-              }))
-            }
-          />
-          <AssumptionPanel request={request} objectiveConfig={activeObjective} funds={funds} onChange={updateRequest} />
-          <section className="panel">
-            <div className="panelHeader">
-              <div>
-                <h2>Review and Run</h2>
-              </div>
-              <span className={validationErrors.length ? "badge warn" : "badge success"}>{validationErrors.length ? "Check" : "Ready"}</span>
-            </div>
-            {validationErrors.length ? (
-              <div className="validationList">
-                {validationErrors.map((item) => <div className="errorLine" key={item}>{item}</div>)}
-              </div>
-            ) : null}
-          </section>
+      <div className="main">
+        <PortfolioStep
+          active={currentStep === 0}
+          funds={funds}
+          onAssetsChange={handleAssetsChange}
+          onContinue={() => advanceTo(1)}
+        />
+        <ObjectiveStep
+          active={currentStep === 1}
+          selected={request.objective}
+          onSelect={applyObjective}
+          onBack={() => goToStep(0)}
+          onContinue={() => advanceTo(2)}
+        />
+        <AssumptionsStep
+          active={currentStep === 2}
+          request={request}
+          objectiveConfig={activeObjective}
+          funds={funds}
+          validationErrors={validationErrors}
+          loading={loading}
+          onChange={updateRequest}
+          onBack={() => goToStep(1)}
+          onRun={submit}
+        />
+        <div className={currentStep === 3 ? "page active" : "page"}>
+          {error ? <div className="card"><div className="banner"><span className="ic">&#9888;</span><span>{error}</span></div></div> : null}
+          <RunSummary result={result} />
+          <div className="actions">
+            <button className="btn btn-ghost" onClick={() => goToStep(2)} type="button">&larr; Adjust assumptions</button>
+            <button className="btn btn-ghost" onClick={startOver} type="button">Start a new portfolio</button>
+          </div>
         </div>
-        <RunSummary result={result} />
       </div>
-    </main>
+
+      <RunOverlay open={loading} />
+    </div>
   );
 }
 

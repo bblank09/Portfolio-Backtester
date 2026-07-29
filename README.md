@@ -47,9 +47,9 @@ The project deliberately excludes Monte Carlo simulation, portfolio optimization
 
 ## 3. Screenshots
 
-![Portfolio Backtester dashboard — Growth tab with interactive hover tooltip](docs/assets/dashboard.png)
+![Portfolio Backtester — step 1 of the 4-step workflow, with fund search and an allocation donut chart](docs/assets/dashboard.png)
 
-_Growth tab: portfolio vs. benchmark vs. net-invested curve, with a hover crosshair and per-series tooltip._
+_Step 1 of the guided workflow (Portfolio → Objective → Assumptions → Results): search-driven fund picker, live weight validation, and an allocation donut chart. A dark theme is also available via the top-bar toggle._
 
 ## 4. System Architecture
 
@@ -90,14 +90,16 @@ The in-app **Report** tab exposes this same audit trail per run: objective, inpu
 
 ## 6. Features
 
-- **Objective-driven workflow** — four presets (Past Performance, Monthly DCA, Monthly Withdrawal, Rebalancing Impact) auto-fill required inputs while keeping everything editable.
-- **SEC fund universe search & portfolio builder** — search by `proj_id`, fund name, or class; live weight validation (must sum to 100%).
+- **Guided 4-step workflow** — Portfolio → Objective → Assumptions → Results, with a top stepper bar; each step is validated before the next unlocks (e.g. weights must sum to 100% before continuing).
+- **Search-driven fund picker** — click a fund field to browse the full SEC universe, or type to filter (by `proj_id`, fund name, or class); an allocation donut chart updates live as weights change.
+- **Objective-driven assumptions** — four presets (Past Performance, Monthly DCA, Monthly Withdrawal, Rebalancing Impact) auto-fill required inputs while keeping everything editable, with a plain-language review summary before running.
 - **Nine-tab result view** — Summary, Overview, Growth, Drawdown, Returns, Metrics, Cashflows, Rebalancing, Report.
 - **Interactive charts** — hover crosshair with per-series tooltips, full date-labeled axes (not just start/end), min/max/latest stats, on every time-series chart in the app.
 - **Monthly return heatmap, histogram, and rolling 12-month return/volatility/tracking-error.**
 - **Cashflow simulation** — recurring contribution or withdrawal, configurable frequency and timing (beginning/end of period).
 - **Rebalancing simulation** — none / monthly / quarterly / annual, with turnover and cost tracking.
 - **Benchmark risk decomposition** — beta, alpha, tracking error, information ratio, correlation.
+- **Light and dark themes** — toggle in the top bar, preference remembered across visits.
 - **Reproducibility verification** — every run persists `request.json` + `result.json`; a saved run can be recomputed and diffed against the stored result (`scripts/sec_verify_run_reproducibility.py`).
 - **Exportable CQF report** — Markdown report, run config, and metrics JSON, generated per run.
 
@@ -127,7 +129,7 @@ python3 -m uvicorn backend.app.main:app --reload
 npm run frontend:dev
 ```
 
-Open the frontend dev server URL, pick an objective preset, add SEC funds, set weights to 100%, and run the backtest.
+Open the frontend dev server URL and follow the 4-step workflow: build a portfolio (search and add SEC funds until weights sum to 100%), pick an objective preset, review/adjust assumptions, then run the backtest.
 
 **Reproduce a saved run:**
 
@@ -151,9 +153,9 @@ backend/
 frontend/
   src/
     api/         # Backend API client
-    components/  # FundSelector, PortfolioEditor, AssumptionPanel, RunSummary
+    components/  # PortfolioStep, ObjectiveStep, AssumptionsStep, RunSummary (results), RunOverlay, Stepper
     objectives/  # Objective preset definitions
-    pages/       # BacktestWorkspace (top-level page)
+    pages/       # BacktestWorkspace (4-step wizard shell)
 data/
   sec/           # Cached SEC NAV data (normalized cache is committed; raw cache is gitignored)
   runs/          # Persisted run artifacts (gitignored)
