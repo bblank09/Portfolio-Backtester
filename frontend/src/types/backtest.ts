@@ -1,9 +1,3 @@
-export type Objective =
-  | "past_performance"
-  | "monthly_dca"
-  | "monthly_withdrawal"
-  | "rebalancing_impact";
-
 export type Frequency = "monthly" | "quarterly" | "annual";
 export type CashflowType = "contribution" | "withdrawal";
 export type CashflowTiming = "beginning" | "end";
@@ -22,6 +16,9 @@ export interface SecFund {
   class_abbr_name: string;
   display_name: string;
   search_term: string;
+  amc_name_th: string;
+  amc_name_en: string;
+  policy_desc: string;
 }
 
 export interface CashflowRule {
@@ -48,7 +45,6 @@ export interface DataAssumptions {
 }
 
 export interface BacktestRequest {
-  objective: Objective;
   assets: SecFundAllocation[];
   start_date: string;
   end_date: string;
@@ -99,7 +95,6 @@ export interface BacktestResult {
     total_withdrawn: number;
     total_costs: number;
   };
-  objective_summary: Record<string, unknown>;
   equity_curve: TimeSeriesPoint[];
   benchmark_curve: TimeSeriesPoint[];
   drawdown_curve: TimeSeriesPoint[];
@@ -109,6 +104,7 @@ export interface BacktestResult {
   annual_returns: TableSection;
   risk_metrics: TableSection;
   diversification: TableSection;
+  asset_metrics: TableSection;
   quality_issues: QualityIssue[];
   formula_references: string[];
 }

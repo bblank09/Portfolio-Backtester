@@ -8,7 +8,6 @@ from .enums import (
     CashflowType,
     DataSource,
     Frequency,
-    Objective,
     PriceField,
     RebalanceMode,
 )
@@ -44,7 +43,6 @@ class DataAssumptions(BaseModel):
 
 
 class BacktestRequest(BaseModel):
-    objective: Objective
     assets: list[SecFundAllocation] = Field(min_length=1, max_length=20)
     start_date: date
     end_date: date
@@ -73,22 +71,8 @@ class BacktestRequest(BaseModel):
 
         if self.start_date >= self.end_date:
             raise ValueError("start_date must be before end_date")
-        if self.objective == Objective.monthly_dca and (
-            not self.cashflow.enabled
-            or self.cashflow.type != CashflowType.contribution
-            or self.cashflow.frequency != Frequency.monthly
-            or self.cashflow.amount <= 0
-        ):
-            raise ValueError("monthly_dca requires an enabled monthly contribution cashflow")
-        if self.objective == Objective.monthly_withdrawal and (
-            not self.cashflow.enabled
-            or self.cashflow.type != CashflowType.withdrawal
-            or self.cashflow.frequency != Frequency.monthly
-            or self.cashflow.amount <= 0
-        ):
-            raise ValueError("monthly_withdrawal requires an enabled monthly withdrawal cashflow")
-        if self.objective == Objective.past_performance and self.cashflow.enabled:
-            raise ValueError("past_performance must not include recurring cashflows")
+        if self.cashflow.enabled and self.cashflow.amount <= 0:
+            raise ValueError("cashflow amount must be greater than zero when cashflow is enabled")
         return self
 
 
@@ -120,7 +104,6 @@ class QualityIssue(BaseModel):
 class BacktestResult(BaseModel):
     request: BacktestRequest
     summary: MetricSummary
-    objective_summary: dict[str, Any]
     equity_curve: list[TimeSeriesPoint]
     benchmark_curve: list[TimeSeriesPoint]
     drawdown_curve: list[TimeSeriesPoint]
@@ -128,5 +111,6 @@ class BacktestResult(BaseModel):
     annual_returns: TableSection
     risk_metrics: TableSection
     diversification: TableSection
+    asset_metrics: TableSection
     quality_issues: list[QualityIssue]
     formula_references: list[str]

@@ -248,7 +248,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .fund-suggest {
   position: absolute; left: 0; right: 0; top: calc(100% + 4px);
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-md);
-  box-shadow: var(--shadow-md); z-index: 5; overflow: hidden; display: none; max-height: 260px; overflow-y: auto;
+  box-shadow: var(--shadow-md); z-index: 5; overflow: hidden; display: none; max-height: 400px; overflow-y: auto;
 }
 .fund-suggest.open { display: block; }
 .fund-suggest button { display: block; width: 100%; text-align: left; padding: 9px 12px; border: 0; background: none; cursor: pointer; color: var(--text-primary); font-size: 13px; }
@@ -275,6 +275,41 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .pill.accent { background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-soft-border); }
 
 .example-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+
+.fund-suggest-filters { border-bottom: 1px solid var(--border); background: var(--surface-2); }
+.fund-suggest-filters .fund-suggest-filter-toggle {
+  width: 100%; display: flex; align-items: center; gap: 6px; border: 0; background: none; cursor: pointer;
+  padding: 8px 12px; font-size: 11.5px; font-weight: 600; color: var(--text-secondary); text-align: left;
+}
+.fund-suggest-filter-toggle:hover { color: var(--text-primary); }
+.fund-suggest-filter-toggle .chev { margin-left: auto; transition: transform .15s; }
+.fund-suggest-filter-toggle .chev.open { transform: rotate(180deg); }
+.fund-suggest-filter-body { display: flex; flex-direction: column; gap: 12px; padding: 8px 12px 10px; }
+.fund-suggest-filter-body .filter-clear-all {
+  display: inline-flex; width: auto; align-self: flex-start;
+  border: 0; background: none; padding: 0; color: var(--accent); font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.filter-clear-all:hover { text-decoration: underline; }
+.filter-mini-group { display: flex; flex-direction: column; gap: 6px; }
+.filter-mini-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.filter-mini-label { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-tertiary); }
+.filter-mini-count { font-size: 10.5px; font-weight: 600; color: var(--accent); }
+.filter-mini-search {
+  display: flex; align-items: center; gap: 6px; border: 1px solid var(--border-strong); border-radius: var(--r-sm);
+  padding: 4px 8px; color: var(--text-tertiary);
+}
+.filter-mini-search input {
+  border: 0; background: none; outline: 0; width: 100%; font-size: 11.5px; color: var(--text-primary); padding: 0;
+}
+.filter-checklist { display: flex; flex-direction: column; max-height: 148px; overflow-y: auto; gap: 1px; }
+.filter-check-row {
+  display: flex; align-items: center; gap: 8px; padding: 4px 4px; border-radius: var(--r-sm); cursor: pointer; width: 100%;
+}
+.filter-check-row:hover { background: var(--surface); }
+.filter-check-row input[type="checkbox"] { flex: 0 0 auto; width: auto; accent-color: var(--accent); cursor: pointer; }
+.filter-check-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11.5px; color: var(--text-primary); }
+.filter-check-count { flex: 0 0 auto; font-size: 10.5px; color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.filter-check-empty { margin: 4px; font-size: 11.5px; color: var(--text-tertiary); }
 .link-btn { background: none; border: 0; color: var(--accent); font-weight: 600; cursor: pointer; padding: 0; font-size: 13px; }
 .link-btn:hover { color: var(--accent-hover); text-decoration: underline; }
 
@@ -352,7 +387,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .resultHeader { align-items: flex-start; }
 
 h2 { margin: 0; font-size: 19px; font-weight: 700; }
-h3 { margin: 0; font-size: 13.5px; font-weight: 650; color: var(--text-primary); }
+h3 { margin: 0; font-size: 13.5px; font-weight: 650; color: var(--accent); }
 p, small { color: var(--text-secondary); }
 
 .sourceLine { display: inline-flex; align-items: center; gap: 6px; color: var(--success); font-size: 12px; font-weight: 700; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }

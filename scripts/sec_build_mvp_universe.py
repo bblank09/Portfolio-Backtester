@@ -50,6 +50,9 @@ def main():
                     "class_abbr_name": row["class_abbr_name"],
                     "display_name": row["display_name"],
                     "search_term": term,
+                    "amc_name_th": row["amc_name_th"],
+                    "amc_name_en": row["amc_name_en"],
+                    "policy_desc": row["policy_desc"],
                 }
             )
 
@@ -76,7 +79,17 @@ def main():
     with out.open("w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(
             f,
-            fieldnames=["proj_id", "unique_id", "fund_class_name", "class_abbr_name", "display_name", "search_term"],
+            fieldnames=[
+                "proj_id",
+                "unique_id",
+                "fund_class_name",
+                "class_abbr_name",
+                "display_name",
+                "search_term",
+                "amc_name_th",
+                "amc_name_en",
+                "policy_desc",
+            ],
         )
         writer.writeheader()
         writer.writerows(rows)

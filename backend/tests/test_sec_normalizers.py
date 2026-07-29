@@ -15,6 +15,8 @@ def test_fund_class_normalizer_uses_captured_contract():
     assert row["proj_id"]
     assert row["display_name"]
     assert "fund_class_name" in row
+    assert row["amc_name_en"]
+    assert row["policy_desc"]
 
 
 def test_daily_nav_normalizer_uses_captured_contract():

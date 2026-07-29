@@ -1,19 +1,16 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { fetchFunds, runBacktest } from "../api/client";
 import { AssumptionsStep } from "../components/AssumptionsStep";
-import { ObjectiveStep } from "../components/ObjectiveStep";
 import { PortfolioStep } from "../components/PortfolioStep";
 import { RunOverlay } from "../components/RunOverlay";
 import { RunSummary } from "../components/RunSummary";
 import { Stepper } from "../components/Stepper";
-import { objectives } from "../objectives/objectives";
-import type { BacktestRequest, BacktestResult, Objective, SecFund, SecFundAllocation } from "../types/backtest";
+import type { BacktestRequest, BacktestResult, SecFund, SecFundAllocation } from "../types/backtest";
 
 const initialRequest: BacktestRequest = {
-  objective: "past_performance",
   assets: [],
   start_date: "2020-01-31",
-  end_date: "2024-12-31",
+  end_date: "2024-06-30",
   initial_capital: 100000,
   benchmark_proj_id: "",
   risk_free_rate_pct: 0,
@@ -44,10 +41,6 @@ export function BacktestWorkspace() {
       .catch((caught: Error) => setError(caught.message));
   }, []);
 
-  const activeObjective = useMemo(
-    () => objectives.find((objective) => objective.id === request.objective) ?? objectives[0],
-    [request.objective]
-  );
   const totalWeight = request.assets.reduce((sum, asset) => sum + asset.weight, 0);
   const validationErrors = validateRequest(request, totalWeight);
 
@@ -68,12 +61,6 @@ export function BacktestWorkspace() {
     });
   }
 
-  function applyObjective(id: Objective) {
-    const config = objectives.find((objective) => objective.id === id);
-    if (!config) return;
-    updateRequest((current) => config.apply(current));
-  }
-
   function goToStep(index: number) {
     setCurrentStep(index);
     window.scrollTo({ top: 0, behavior: "auto" });
@@ -90,7 +77,7 @@ export function BacktestWorkspace() {
     try {
       const response = await runBacktest(request);
       setResult(response);
-      advanceTo(3);
+      advanceTo(2);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Backtest failed");
     } finally {
@@ -127,29 +114,21 @@ export function BacktestWorkspace() {
           onAssetsChange={handleAssetsChange}
           onContinue={() => advanceTo(1)}
         />
-        <ObjectiveStep
-          active={currentStep === 1}
-          selected={request.objective}
-          onSelect={applyObjective}
-          onBack={() => goToStep(0)}
-          onContinue={() => advanceTo(2)}
-        />
         <AssumptionsStep
-          active={currentStep === 2}
+          active={currentStep === 1}
           request={request}
-          objectiveConfig={activeObjective}
           funds={funds}
           validationErrors={validationErrors}
+          error={error}
           loading={loading}
           onChange={updateRequest}
-          onBack={() => goToStep(1)}
+          onBack={() => goToStep(0)}
           onRun={submit}
         />
-        <div className={currentStep === 3 ? "page active" : "page"}>
-          {error ? <div className="card"><div className="banner"><span className="ic">&#9888;</span><span>{error}</span></div></div> : null}
+        <div className={currentStep === 2 ? "page active" : "page"}>
           <RunSummary result={result} />
           <div className="actions">
-            <button className="btn btn-ghost" onClick={() => goToStep(2)} type="button">&larr; Adjust assumptions</button>
+            <button className="btn btn-ghost" onClick={() => goToStep(1)} type="button">&larr; Adjust assumptions</button>
             <button className="btn btn-ghost" onClick={startOver} type="button">Start a new portfolio</button>
           </div>
         </div>
@@ -167,23 +146,8 @@ function validateRequest(request: BacktestRequest, totalWeight: number) {
   if (!request.benchmark_proj_id) errors.push("Select a benchmark SEC fund.");
   if (new Date(request.start_date) >= new Date(request.end_date)) errors.push("Start date must be before end date.");
   if (!(request.initial_capital > 0)) errors.push("Initial capital must be greater than zero.");
-  if (request.objective === "past_performance" && request.cashflow.enabled) {
-    errors.push("Past Performance requires cashflow disabled.");
-  }
-  if (request.objective === "monthly_dca") {
-    if (!request.cashflow.enabled || request.cashflow.type !== "contribution" || request.cashflow.frequency !== "monthly") {
-      errors.push("Monthly DCA requires enabled monthly contribution.");
-    }
-    if (!(request.cashflow.amount > 0)) errors.push("Monthly DCA requires contribution amount greater than zero.");
-  }
-  if (request.objective === "monthly_withdrawal") {
-    if (!request.cashflow.enabled || request.cashflow.type !== "withdrawal" || request.cashflow.frequency !== "monthly") {
-      errors.push("Monthly Withdrawal requires enabled monthly withdrawal.");
-    }
-    if (!(request.cashflow.amount > 0)) errors.push("Monthly Withdrawal requires withdrawal amount greater than zero.");
-  }
-  if (request.objective === "rebalancing_impact" && request.rebalancing.mode === "none") {
-    errors.push("Rebalancing Impact requires a rebalancing mode other than None.");
+  if (request.cashflow.enabled && !(request.cashflow.amount > 0)) {
+    errors.push("Cashflow amount must be greater than zero when cashflow is enabled.");
   }
   return errors;
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { KeyboardEvent } from "react";
-import { X } from "lucide-react";
+import type { FocusEvent, KeyboardEvent } from "react";
+import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
 import type { SecFund, SecFundAllocation } from "../types/backtest";
 
 interface Row {
@@ -8,6 +8,24 @@ interface Row {
   projId: string;
   weight: number;
   query: string;
+}
+
+interface Facet {
+  value: string;
+  count: number;
+}
+
+function buildFacets(funds: SecFund[], field: "amc_name_en" | "policy_desc", otherFilter: Set<string>, otherField: "amc_name_en" | "policy_desc") {
+  const counts = new Map<string, number>();
+  for (const fund of funds) {
+    const key = fund[field];
+    if (!key) continue;
+    if (otherFilter.size && !otherFilter.has(fund[otherField])) continue;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({ value, count }))
+    .sort((a, b) => a.value.localeCompare(b.value));
 }
 
 interface Props {
@@ -27,9 +45,44 @@ function nextKey() {
 
 export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Props) {
   const [rows, setRows] = useState<Row[]>([{ key: nextKey(), projId: "", weight: 0, query: "" }]);
+  const [amcFilter, setAmcFilter] = useState<Set<string>>(new Set());
+  const [categoryFilter, setCategoryFilter] = useState<Set<string>>(new Set());
   const seededRef = useRef(false);
 
   const fundsById = useMemo(() => new Map(funds.map((fund) => [fund.proj_id, fund])), [funds]);
+
+  const amcFacets = useMemo(
+    () => buildFacets(funds, "amc_name_en", categoryFilter, "policy_desc"),
+    [funds, categoryFilter]
+  );
+  const categoryFacets = useMemo(
+    () => buildFacets(funds, "policy_desc", amcFilter, "amc_name_en"),
+    [funds, amcFilter]
+  );
+
+  const filteredFunds = useMemo(
+    () =>
+      funds.filter((fund) => {
+        if (amcFilter.size && !amcFilter.has(fund.amc_name_en)) return false;
+        if (categoryFilter.size && !categoryFilter.has(fund.policy_desc)) return false;
+        return true;
+      }),
+    [funds, amcFilter, categoryFilter]
+  );
+
+  function toggleFilter(setter: (updater: (current: Set<string>) => Set<string>) => void, value: string) {
+    setter((current) => {
+      const next = new Set(current);
+      if (next.has(value)) next.delete(value);
+      else next.add(value);
+      return next;
+    });
+  }
+
+  function clearAllFilters() {
+    setAmcFilter(new Set());
+    setCategoryFilter(new Set());
+  }
 
   useEffect(() => {
     if (seededRef.current || funds.length < 2) return;
@@ -90,7 +143,7 @@ export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Pro
     <div className={active ? "page active" : "page"}>
       <div className="page-head">
         <h1>Build your portfolio</h1>
-        <p>Search SEC-registered mutual funds by name or class, set target weights, and confirm they sum to 100% before choosing an objective.</p>
+        <p>Search SEC-registered mutual funds by name or class, set target weights, and confirm they sum to 100% before setting your assumptions.</p>
       </div>
 
       <div className="card">
@@ -109,9 +162,17 @@ export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Pro
             <HoldingsRow
               key={row.key}
               row={row}
-              funds={funds}
+              funds={filteredFunds}
+              allFunds={funds}
               selectedIds={selectedIds}
               canRemove={rows.length > 1}
+              amcFacets={amcFacets}
+              categoryFacets={categoryFacets}
+              amcFilter={amcFilter}
+              categoryFilter={categoryFilter}
+              onToggleAmc={(value) => toggleFilter(setAmcFilter, value)}
+              onToggleCategory={(value) => toggleFilter(setCategoryFilter, value)}
+              onClearFilters={clearAllFilters}
               onSelect={(fund) => selectFund(row.key, fund)}
               onQueryChange={(query) => setQuery(row.key, query)}
               onWeightChange={(weight) => setWeight(row.key, weight)}
@@ -132,8 +193,8 @@ export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Pro
       </div>
 
       <div className="actions">
-        <span className="footnote">Step 1 of 4 &mdash; portfolio weights must sum to 100%.</span>
-        <button className="btn btn-primary" disabled={!complete} onClick={onContinue} type="button">Continue to Objective &rarr;</button>
+        <span className="footnote">Step 1 of 3 &mdash; portfolio weights must sum to 100%.</span>
+        <button className="btn btn-primary" disabled={!complete} onClick={onContinue} type="button">Continue to Assumptions &rarr;</button>
       </div>
     </div>
   );
@@ -142,8 +203,16 @@ export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Pro
 function HoldingsRow({
   row,
   funds,
+  allFunds,
   selectedIds,
   canRemove,
+  amcFacets,
+  categoryFacets,
+  amcFilter,
+  categoryFilter,
+  onToggleAmc,
+  onToggleCategory,
+  onClearFilters,
   onSelect,
   onQueryChange,
   onWeightChange,
@@ -151,24 +220,35 @@ function HoldingsRow({
 }: {
   row: Row;
   funds: SecFund[];
+  allFunds: SecFund[];
   selectedIds: Set<string>;
   canRemove: boolean;
+  amcFacets: Facet[];
+  categoryFacets: Facet[];
+  amcFilter: Set<string>;
+  categoryFilter: Set<string>;
+  onToggleAmc: (value: string) => void;
+  onToggleCategory: (value: string) => void;
+  onClearFilters: () => void;
   onSelect: (fund: SecFund) => void;
   onQueryChange: (query: string) => void;
   onWeightChange: (weight: number) => void;
   onRemove: () => void;
 }) {
   const [open, setOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
+  const activeFilterCount = amcFilter.size + categoryFilter.size;
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const fund = funds.find((item) => item.proj_id === row.projId);
+  const fieldRef = useRef<HTMLDivElement | null>(null);
+  const fund = allFunds.find((item) => item.proj_id === row.projId);
   const displayValue = fund ? fund.display_name : row.query;
 
   const query = row.projId ? "" : row.query.trim().toLowerCase();
   const options = funds.filter((item) => {
     if (selectedIds.has(item.proj_id) && item.proj_id !== row.projId) return false;
     if (!query) return true;
-    const haystack = `${item.proj_id} ${item.display_name} ${item.fund_class_name} ${item.search_term}`.toLowerCase();
+    const haystack = `${item.proj_id} ${item.display_name} ${item.fund_class_name} ${item.search_term} ${item.amc_name_en} ${item.policy_desc}`.toLowerCase();
     return haystack.includes(query);
   });
 
@@ -189,9 +269,15 @@ function HoldingsRow({
     }
   }
 
+  function handleBlur(event: FocusEvent<HTMLDivElement>) {
+    const next = event.relatedTarget as Node | null;
+    if (next && fieldRef.current?.contains(next)) return;
+    setOpen(false);
+  }
+
   return (
     <div className="holdings-row">
-      <div className="fund-field">
+      <div className="fund-field" onBlur={handleBlur} ref={fieldRef}>
         <input
           className="field fund-input"
           ref={inputRef}
@@ -200,10 +286,38 @@ function HoldingsRow({
           onFocus={() => { setOpen(true); setHighlight(0); }}
           onChange={(event) => { onQueryChange(event.target.value); setOpen(true); setHighlight(0); }}
           onKeyDown={handleKeyDown}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
           autoComplete="off"
         />
         <div className={open ? "fund-suggest open" : "fund-suggest"}>
+          {amcFacets.length || categoryFacets.length ? (
+            <div className="fund-suggest-filters">
+              <button
+                className="fund-suggest-filter-toggle"
+                onClick={() => setFiltersOpen((current) => !current)}
+                onMouseDown={(event) => event.preventDefault()}
+                type="button"
+              >
+                <SlidersHorizontal size={12} />
+                Filters{activeFilterCount ? ` (${activeFilterCount})` : ""}
+                <ChevronDown className={filtersOpen ? "chev open" : "chev"} size={12} />
+              </button>
+              {filtersOpen ? (
+                <div className="fund-suggest-filter-body">
+                  {activeFilterCount ? (
+                    <button className="filter-clear-all" onClick={onClearFilters} onMouseDown={(event) => event.preventDefault()} type="button">
+                      Clear all filters
+                    </button>
+                  ) : null}
+                  {amcFacets.length ? (
+                    <FacetGroup label="AMC" facets={amcFacets} selected={amcFilter} onToggle={onToggleAmc} />
+                  ) : null}
+                  {categoryFacets.length ? (
+                    <FacetGroup label="Fund category" facets={categoryFacets} selected={categoryFilter} onToggle={onToggleCategory} />
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
           {options.slice(0, 8).map((item, index) => (
             <button
               className={index === highlight ? "highlighted" : ""}
@@ -229,6 +343,59 @@ function HoldingsRow({
       <button aria-label="Remove fund row" className="icon-btn remove-row" disabled={!canRemove} onClick={onRemove} type="button">
         <X size={15} />
       </button>
+    </div>
+  );
+}
+
+function FacetGroup({
+  label,
+  facets,
+  selected,
+  onToggle
+}: {
+  label: string;
+  facets: Facet[];
+  selected: Set<string>;
+  onToggle: (value: string) => void;
+}) {
+  const [query, setQuery] = useState("");
+  const visible = query.trim()
+    ? facets.filter((facet) => facet.value.toLowerCase().includes(query.trim().toLowerCase()))
+    : facets;
+  const showSearch = facets.length > 6;
+
+  return (
+    <div className="filter-mini-group">
+      <div className="filter-mini-head">
+        <span className="filter-mini-label">{label}</span>
+        {selected.size ? <span className="filter-mini-count">{selected.size} selected</span> : null}
+      </div>
+      {showSearch ? (
+        <div className="filter-mini-search">
+          <Search size={11} />
+          <input
+            onChange={(event) => setQuery(event.target.value)}
+            onMouseDown={(event) => event.stopPropagation()}
+            placeholder={`Search ${label.toLowerCase()}...`}
+            value={query}
+          />
+        </div>
+      ) : null}
+      <div className="filter-checklist">
+        {visible.map((facet) => (
+          <label className="filter-check-row" key={facet.value}>
+            <input
+              checked={selected.has(facet.value)}
+              onChange={() => onToggle(facet.value)}
+              onMouseDown={(event) => event.stopPropagation()}
+              type="checkbox"
+            />
+            <span className="filter-check-label">{facet.value}</span>
+            <span className="filter-check-count">{facet.count}</span>
+          </label>
+        ))}
+        {!visible.length ? <p className="filter-check-empty">No matches</p> : null}
+      </div>
     </div>
   );
 }

@@ -19,7 +19,6 @@ def test_verifier_uses_saved_artifacts_and_compares_recomputed_summary(tmp_path,
     run_dir = tmp_path / run_id
     run_dir.mkdir()
     request = BacktestRequest(
-        objective="past_performance",
         assets=[{"proj_id": "FUND_A", "display_name": "Fund A", "weight": 100}],
         start_date="2020-01-31",
         end_date="2020-02-29",
@@ -59,7 +58,6 @@ def test_verifier_fails_when_a_saved_summary_key_is_missing(tmp_path, monkeypatc
     run_dir = tmp_path / run_id
     run_dir.mkdir()
     request = BacktestRequest(
-        objective="past_performance",
         assets=[{"proj_id": "FUND_A", "display_name": "Fund A", "weight": 100}],
         start_date="2020-01-31",
         end_date="2020-02-29",

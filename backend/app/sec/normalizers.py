@@ -54,6 +54,8 @@ def normalize_fund_class_record(record: dict) -> dict:
         "proj_name_en": str(pick(record, ["proj_name_en", "PROJ_NAME_EN"], required=False) or ""),
         "fund_status": str(pick(record, ["fund_status", "FUND_STATUS"], required=False) or ""),
         "policy_desc": str(pick(record, ["policy_desc", "POLICY_DESC"], required=False) or ""),
+        "amc_name_th": str(pick(record, ["comp_name_th", "COMP_NAME_TH"], required=False) or ""),
+        "amc_name_en": str(pick(record, ["comp_name_en", "COMP_NAME_EN"], required=False) or ""),
         "raw": record,
     }
 

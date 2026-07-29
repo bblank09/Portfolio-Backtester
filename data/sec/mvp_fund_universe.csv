@@ -1,13 +1,13 @@
-proj_id,unique_id,fund_class_name,class_abbr_name,display_name,search_term
-M0209_2548,C0000000021,main,main,K-SET50,SET
-M0155_2547,C0000000023,M-S50-G,M-S50-G,M-S50,SET
-M0005_2565,C0000000239,SCBCIO(A),SCBCIO(A),SCBCIO,SET
-M0056_2564,C0000000329,main,main,BCAP-GMA,SET
-M0187_2563,C0000000290,ABTESSF,ABTESSF,ABTESSF-M,ตราสารทุน
-M0089_2545,C0000000623,main,main,UOBEQRMF,ตราสารทุน
-M0776_2547,C0000005022,main,main,ASP-ERF,ตราสารทุน
-M0359_2552,C0000006099,main,main,X-EQRMF,ตราสารทุน
-M0430_2556,C0000006122,main,main,PEQ,ตราสารทุน
-M0337_2550,C0000000021,main,main,K-MONEY,ตลาดเงิน
-M0084_2545,C0000000023,main,main,MMF-RMF,ตลาดเงิน
-M0306_2552,C0000000239,main,main,SCBTMF,ตลาดเงิน
+proj_id,unique_id,fund_class_name,class_abbr_name,display_name,search_term,amc_name_th,amc_name_en,policy_desc
+M0209_2548,C0000000021,main,main,K-SET50,SET,บริษัทหลักทรัพย์จัดการกองทุน กสิกรไทย จำกัด,KASIKORN ASSET MANAGEMENT COMPANY LIMITED,ตราสารทุน
+M0155_2547,C0000000023,M-S50-G,M-S50-G,M-S50,SET,บริษัทหลักทรัพย์จัดการกองทุน เอ็มเอฟซี จำกัด (มหาชน),MFC ASSET MANAGEMENT PUBLIC COMPANY LIMITED ,ตราสารทุน
+M0005_2565,C0000000239,SCBCIO(A),SCBCIO(A),SCBCIO,SET,บริษัทหลักทรัพย์จัดการกองทุน ไทยพาณิชย์ จำกัด,SCB ASSET MANAGEMENT COMPANY LIMITED,ผสม
+M0056_2564,C0000000329,main,main,BCAP-GMA,SET,บริษัทหลักทรัพย์จัดการกองทุนรวม  บัวหลวง จำกัด,BBL ASSET MANAGEMENT COMPANY LIMITED,ผสม
+M0187_2563,C0000000290,ABTESSF,ABTESSF,ABTESSF-M,ตราสารทุน,บริษัทหลักทรัพย์จัดการกองทุน อเบอร์ดีน (ประเทศไทย) จำกัด,ABERDEEN ASSET MANAGEMENT (THAILAND) LIMITED,ตราสารทุน
+M0089_2545,C0000000623,main,main,UOBEQRMF,ตราสารทุน,บริษัทหลักทรัพย์จัดการกองทุน ยูโอบี (ประเทศไทย) จำกัด,UOB ASSET MANAGEMENT (THAILAND) COMPANY LIMITED,ตราสารทุน
+M0776_2547,C0000005022,main,main,ASP-ERF,ตราสารทุน,บริษัทหลักทรัพย์จัดการกองทุน แอสเซท พลัส จำกัด,ASSET PLUS FUND MANAGEMENT COMPANY LIMITED,ตราสารทุน
+M0359_2552,C0000006099,main,main,X-EQRMF,ตราสารทุน,บริษัทหลักทรัพย์จัดการกองทุน เอ็กซ์สปริง จำกัด,XSPRING ASSET MANAGEMENT COMPANY LIMITED,ตราสารทุน
+M0430_2556,C0000006122,main,main,PEQ,ตราสารทุน,บริษัทหลักทรัพย์จัดการกองทุนรวม  ฟิลลิป จำกัด,PHILLIP ASSET MANAGEMENT COMPANY LIMITED,ตราสารทุน
+M0337_2550,C0000000021,main,main,K-MONEY,ตลาดเงิน,บริษัทหลักทรัพย์จัดการกองทุน กสิกรไทย จำกัด,KASIKORN ASSET MANAGEMENT COMPANY LIMITED,ตราสารหนี้
+M0084_2545,C0000000023,main,main,MMF-RMF,ตลาดเงิน,บริษัทหลักทรัพย์จัดการกองทุน เอ็มเอฟซี จำกัด (มหาชน),MFC ASSET MANAGEMENT PUBLIC COMPANY LIMITED ,ตราสารหนี้
+M0306_2552,C0000000239,main,main,SCBTMF,ตลาดเงิน,บริษัทหลักทรัพย์จัดการกองทุน ไทยพาณิชย์ จำกัด,SCB ASSET MANAGEMENT COMPANY LIMITED,ตราสารหนี้

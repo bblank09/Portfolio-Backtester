@@ -1,4 +1,4 @@
-const STEP_LABELS = ["Portfolio", "Objective", "Assumptions", "Results"];
+const STEP_LABELS = ["Portfolio", "Assumptions", "Results"];
 
 interface Props {
   currentStep: number;
@@ -15,7 +15,7 @@ export function Stepper({ currentStep, unlockedStep, onStepClick }: Props) {
         ))}
       </div>
       <div className="stepper-compact">
-        Step <b>{currentStep + 1}</b> of 4 &middot; {STEP_LABELS[currentStep]}
+        Step <b>{currentStep + 1}</b> of {STEP_LABELS.length} &middot; {STEP_LABELS[currentStep]}
       </div>
     </>
   );

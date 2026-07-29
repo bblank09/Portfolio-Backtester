@@ -6,7 +6,6 @@ from backend.app.domain.schemas import BacktestRequest
 
 def valid_request():
     return {
-        "objective": "monthly_dca",
         "assets": [
             {"proj_id": "M0209_2548", "display_name": "K-SET50", "weight": 60},
             {"proj_id": "M0337_2550", "display_name": "K-MONEY", "weight": 40},
@@ -59,18 +58,10 @@ def test_data_source_must_be_sec_open_data():
         BacktestRequest(**payload)
 
 
-def test_monthly_withdrawal_requires_withdrawal_cashflow():
+def test_enabled_cashflow_requires_positive_amount():
     payload = valid_request()
-    payload["objective"] = "monthly_withdrawal"
-    payload["cashflow"]["type"] = "contribution"
-    with pytest.raises(ValidationError, match="monthly_withdrawal requires"):
-        BacktestRequest(**payload)
-
-
-def test_past_performance_disallows_recurring_cashflow():
-    payload = valid_request()
-    payload["objective"] = "past_performance"
-    with pytest.raises(ValidationError, match="past_performance must not include"):
+    payload["cashflow"]["amount"] = 0
+    with pytest.raises(ValidationError, match="cashflow amount must be greater than zero"):
         BacktestRequest(**payload)
 
 

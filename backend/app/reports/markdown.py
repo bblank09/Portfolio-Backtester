@@ -17,7 +17,6 @@ def render_cqf_report(
     diversification = ensure_rows(result.get("diversification", {}).get("rows", []))
 
     sections = [
-        ("Objective", objective_section(request)),
         ("SEC Dataset Manifest", manifest_section(manifest)),
         ("Selected Funds", selected_funds_section(request)),
         ("Input Assumptions", input_assumptions_section(request)),
@@ -36,10 +35,6 @@ def render_cqf_report(
     title = "# CQF Portfolio Backtesting Report\n\n"
     body = "\n\n".join(f"## {heading}\n\n{content}" for heading, content in sections)
     return title + body + "\n"
-
-
-def objective_section(request: dict[str, Any]) -> str:
-    return f"Objective preset: `{request.get('objective', 'unknown')}`."
 
 
 def manifest_section(manifest: dict[str, Any]) -> str:

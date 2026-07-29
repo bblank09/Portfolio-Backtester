@@ -101,8 +101,8 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
 
         if rebalance_due(current_date, previous_date, request.rebalancing.mode):
             before = values.copy()
-            values, turnover = rebalance_values(values, target_weights)
-            cost = turnover * cost_rate
+            values, turnover, money_turnover = rebalance_values(values, target_weights)
+            cost = money_turnover * cost_rate
             if cost:
                 values = values - values / values.sum() * cost
                 total_costs += cost
@@ -176,7 +176,6 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
     return {
         "data_source": "sec_open_data",
         "summary": summary,
-        "objective_summary": objective_summary(request, summary, rebalance_rows),
         "equity_curve": series_points(portfolio_value),
         "benchmark_curve": series_points(benchmark_curve),
         "drawdown_curve": series_points(drawdown_series(portfolio_value)),
@@ -190,6 +189,7 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
         "annual_returns": annual_return_table(portfolio_returns),
         "risk_metrics": {"title": "Benchmark Risk", "rows": risk_rows},
         "diversification": diversification_table(returns[asset_ids]),
+        "asset_metrics": asset_metrics_table(request, returns, values),
         "cashflows": [{"date": pd.Timestamp(row["date"]).date().isoformat(), "amount": row["amount"]} for row in cashflow_rows],
         "rebalances": [
             {"date": pd.Timestamp(row["date"]).date().isoformat(), "turnover": row["turnover"], "cost": row["cost"]}
@@ -219,38 +219,6 @@ def apply_cashflow(values: pd.Series, target_weights: pd.Series, cashflow: float
     return -withdrawal
 
 
-def objective_summary(request: BacktestRequest, summary: dict[str, Any], rebalance_rows: list[dict]) -> dict[str, Any]:
-    if request.objective == "monthly_dca":
-        return {
-            "objective": request.objective.value,
-            "total_contributed": summary["total_contributed"],
-            "ending_value": summary["ending_value"],
-            "net_profit": summary["ending_value"] + summary["total_withdrawn"] - summary["total_contributed"],
-            "cashflow_count": summary["cashflow_count"],
-        }
-    if request.objective == "monthly_withdrawal":
-        return {
-            "objective": request.objective.value,
-            "total_withdrawn": summary["total_withdrawn"],
-            "ending_value": summary["ending_value"],
-            "portfolio_survived": summary["ending_value"] > 0,
-        }
-    if request.objective == "rebalancing_impact":
-        average_turnover = sum(row["turnover"] for row in rebalance_rows) / len(rebalance_rows) if rebalance_rows else 0.0
-        return {
-            "objective": request.objective.value,
-            "rebalance_count": len(rebalance_rows),
-            "average_turnover": average_turnover,
-            "total_costs": summary["total_costs"],
-        }
-    return {
-        "objective": request.objective.value,
-        "ending_value": summary["ending_value"],
-        "twrr_cagr": summary["twrr_cagr"],
-        "max_drawdown": summary["max_drawdown"],
-    }
-
-
 def series_points(series: pd.Series) -> list[dict[str, float | str]]:
     return [{"date": pd.Timestamp(cast(Any, index)).date().isoformat(), "value": float(value)} for index, value in series.dropna().items()]
 
@@ -265,6 +233,27 @@ def annual_return_table(returns: pd.Series) -> dict[str, Any]:
         for year, values in sorted(yearly_values.items())
     ]
     return {"title": "Annual Returns", "rows": rows}
+
+
+def asset_metrics_table(request: BacktestRequest, returns: pd.DataFrame, final_values: pd.Series) -> dict[str, Any]:
+    ending_total = float(final_values.sum())
+    rows = []
+    for asset in request.assets:
+        asset_returns = returns[asset.proj_id]
+        final_value = float(final_values[asset.proj_id])
+        final_weight_pct = (final_value / ending_total * 100) if ending_total else 0.0
+        rows.append(
+            {
+                "proj_id": asset.proj_id,
+                "fund": asset.display_name,
+                "target_weight_pct": asset.weight,
+                "final_weight_pct": final_weight_pct,
+                "drift_pct": final_weight_pct - asset.weight,
+                "cagr": annualized_return(asset_returns, PERIODS_PER_YEAR),
+                "volatility": annualized_volatility(asset_returns, PERIODS_PER_YEAR),
+            }
+        )
+    return {"title": "Asset Risk and Allocation", "rows": rows}
 
 
 def diversification_table(asset_returns: pd.DataFrame) -> dict[str, Any]:

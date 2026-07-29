@@ -1,21 +1,20 @@
 import { useState } from "react";
 import { Play } from "lucide-react";
 import type { BacktestRequest, SecFund } from "../types/backtest";
-import type { ObjectiveConfig } from "../objectives/objectives";
 
 interface Props {
   active: boolean;
   request: BacktestRequest;
-  objectiveConfig: ObjectiveConfig;
   funds: SecFund[];
   validationErrors: string[];
+  error: string;
   loading: boolean;
   onChange: (request: BacktestRequest) => void;
   onBack: () => void;
   onRun: () => void;
 }
 
-export function AssumptionsStep({ active, request, objectiveConfig, funds, validationErrors, loading, onChange, onBack, onRun }: Props) {
+export function AssumptionsStep({ active, request, funds, validationErrors, error, loading, onChange, onBack, onRun }: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const showCashflow = request.cashflow.enabled;
   const cashflowLabel = request.cashflow.type === "withdrawal" ? "Withdrawal amount" : "Contribution amount";
@@ -24,12 +23,12 @@ export function AssumptionsStep({ active, request, objectiveConfig, funds, valid
   return (
     <div className={active ? "page active" : "page"}>
       <div className="page-head">
-        <h1>Review assumptions</h1>
-        <p>Defaults are filled in for {objectiveConfig.label} &mdash; adjust anything before running.</p>
+        <h1>Set your assumptions</h1>
+        <p>Every parameter below is yours to set directly &mdash; grouped by topic so it stays easy to fill in.</p>
       </div>
 
       <div className="card">
-        <div className="section-title">Required</div>
+        <div className="section-title">Date range &amp; capital</div>
         <div className="form-grid">
           <div className="form-field">
             <label htmlFor="startDate">Start date</label>
@@ -51,45 +50,27 @@ export function AssumptionsStep({ active, request, objectiveConfig, funds, valid
               ))}
             </select>
           </div>
-          {showCashflow ? (
-            <div className="form-field">
-              <label htmlFor="cashflowAmount">{cashflowLabel}</label>
-              <input
-                className="field num"
-                id="cashflowAmount"
-                min={0}
-                type="number"
-                value={request.cashflow.amount}
-                onChange={(event) => onChange({ ...request, cashflow: { ...request.cashflow, amount: Number(event.target.value) } })}
-              />
-            </div>
-          ) : null}
-          <div className="form-field">
-            <label htmlFor="rebalancing">Rebalancing</label>
-            <RebalanceSelect request={request} onChange={onChange} />
-          </div>
         </div>
-        <p className="footnote" style={{ marginTop: 10 }}>{objectiveConfig.required.join(", ")}</p>
 
-        <div className="section-title" style={{ marginTop: 18 }}>Optional</div>
+        <div className="section-title" style={{ marginTop: 20 }}>Cashflow</div>
         <div className="form-grid">
           <div className="form-field">
-            <label htmlFor="cashflowEnabled">Cashflow enabled</label>
+            <label htmlFor="cashflowEnabled">Recurring cashflow</label>
             <select
               className="field"
               id="cashflowEnabled"
               value={String(request.cashflow.enabled)}
               onChange={(event) => onChange({ ...request, cashflow: { ...request.cashflow, enabled: event.target.value === "true" } })}
             >
-              <option value="false">No</option>
-              <option value="true">Yes</option>
+              <option value="false">Disabled</option>
+              <option value="true">Enabled</option>
             </select>
           </div>
           <div className="form-field">
-            <label htmlFor="cashflowType">Cashflow type</label>
+            <label htmlFor="cashflowType">Type</label>
             <select
               className="field"
-              disabled={!request.cashflow.enabled}
+              disabled={!showCashflow}
               id="cashflowType"
               value={request.cashflow.type}
               onChange={(event) => onChange({ ...request, cashflow: { ...request.cashflow, type: event.target.value as BacktestRequest["cashflow"]["type"] } })}
@@ -99,10 +80,22 @@ export function AssumptionsStep({ active, request, objectiveConfig, funds, valid
             </select>
           </div>
           <div className="form-field">
-            <label htmlFor="cashflowFrequency">Cashflow frequency</label>
+            <label htmlFor="cashflowAmount">{cashflowLabel}</label>
+            <input
+              className="field num"
+              disabled={!showCashflow}
+              id="cashflowAmount"
+              min={0}
+              type="number"
+              value={request.cashflow.amount}
+              onChange={(event) => onChange({ ...request, cashflow: { ...request.cashflow, amount: Number(event.target.value) } })}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="cashflowFrequency">Frequency</label>
             <select
               className="field"
-              disabled={!request.cashflow.enabled}
+              disabled={!showCashflow}
               id="cashflowFrequency"
               value={request.cashflow.frequency}
               onChange={(event) => onChange({ ...request, cashflow: { ...request.cashflow, frequency: event.target.value as BacktestRequest["cashflow"]["frequency"] } })}
@@ -113,20 +106,32 @@ export function AssumptionsStep({ active, request, objectiveConfig, funds, valid
             </select>
           </div>
           <div className="form-field">
-            <label htmlFor="cashflowTiming">Cashflow timing</label>
+            <label htmlFor="cashflowTiming">Timing</label>
             <select
               className="field"
-              disabled={!request.cashflow.enabled}
+              disabled={!showCashflow}
               id="cashflowTiming"
               value={request.cashflow.timing}
               onChange={(event) => onChange({ ...request, cashflow: { ...request.cashflow, timing: event.target.value as BacktestRequest["cashflow"]["timing"] } })}
             >
-              <option value="beginning">Beginning</option>
-              <option value="end">End</option>
+              <option value="beginning">Beginning of period</option>
+              <option value="end">End of period</option>
             </select>
           </div>
         </div>
-        <p className="footnote" style={{ marginTop: 10 }}>{objectiveConfig.optional.join(", ")}</p>
+
+        <div className="section-title" style={{ marginTop: 20 }}>Rebalancing</div>
+        <div className="form-grid">
+          <div className="form-field">
+            <label htmlFor="rebalancing">Mode</label>
+            <select className="field" id="rebalancing" value={request.rebalancing.mode} onChange={(event) => onChange({ ...request, rebalancing: { mode: event.target.value as BacktestRequest["rebalancing"]["mode"] } })}>
+              <option value="none">None</option>
+              <option value="monthly">Monthly</option>
+              <option value="quarterly">Quarterly</option>
+              <option value="annual">Annual</option>
+            </select>
+          </div>
+        </div>
 
         <div className={advancedOpen ? "advanced-toggle open" : "advanced-toggle"} onClick={() => setAdvancedOpen((open) => !open)}>
           <span className="chev">&#9654;</span> Advanced settings
@@ -174,12 +179,21 @@ export function AssumptionsStep({ active, request, objectiveConfig, funds, valid
       </div>
 
       <div className="review-box">
-        Run a backtest for <b>{request.assets.map((asset) => `${asset.display_name} ${asset.weight}%`).join(", ")}</b> from <b>{request.start_date}</b> to <b>{request.end_date}</b>, starting capital <b>{request.initial_capital.toLocaleString()}</b>.
+        Run a backtest for <b>{request.assets.map((asset) => `${asset.display_name} ${asset.weight}%`).join(", ")}</b> from <b>{request.start_date}</b> to <b>{request.end_date}</b>, starting capital <b>{request.initial_capital.toLocaleString()}</b>
+        {showCashflow ? <> with <b>{request.cashflow.type}</b> of <b>{request.cashflow.amount.toLocaleString()}</b> {request.cashflow.frequency}</> : null}
+        {request.rebalancing.mode !== "none" ? <>, rebalanced <b>{request.rebalancing.mode}</b></> : null}.
       </div>
 
       {validationErrors.length ? (
         <div className="card" style={{ display: "grid", gap: 8 }}>
           {validationErrors.map((item) => <div className="errorLine" key={item}>{item}</div>)}
+        </div>
+      ) : null}
+
+      {error ? (
+        <div className="banner">
+          <span className="ic">&#9888;</span>
+          <span>{error}</span>
         </div>
       ) : null}
 
@@ -190,16 +204,5 @@ export function AssumptionsStep({ active, request, objectiveConfig, funds, valid
         </button>
       </div>
     </div>
-  );
-}
-
-function RebalanceSelect({ request, onChange }: { request: BacktestRequest; onChange: (request: BacktestRequest) => void }) {
-  return (
-    <select className="field" value={request.rebalancing.mode} onChange={(event) => onChange({ ...request, rebalancing: { mode: event.target.value as BacktestRequest["rebalancing"]["mode"] } })}>
-      <option value="none">None</option>
-      <option value="monthly">Monthly</option>
-      <option value="quarterly">Quarterly</option>
-      <option value="annual">Annual</option>
-    </select>
   );
 }

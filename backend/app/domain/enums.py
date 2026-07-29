@@ -1,13 +1,6 @@
 from enum import StrEnum
 
 
-class Objective(StrEnum):
-    past_performance = "past_performance"
-    monthly_dca = "monthly_dca"
-    monthly_withdrawal = "monthly_withdrawal"
-    rebalancing_impact = "rebalancing_impact"
-
-
 class Frequency(StrEnum):
     monthly = "monthly"
     quarterly = "quarterly"

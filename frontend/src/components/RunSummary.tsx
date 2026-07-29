@@ -1,6 +1,6 @@
 import { AlertTriangle, BarChart3, Download, ShieldCheck } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
+import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 import type { BacktestResult, TableSection, TimeSeriesPoint } from "../types/backtest";
 
 interface Props {
@@ -13,6 +13,10 @@ const outputTabs: OutputTab[] = ["Summary", "Overview", "Growth", "Drawdown", "R
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 const pct = new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 2 });
+
+function slugify(label: string) {
+  return label.replace(/[^a-zA-Z0-9]+/g, "-");
+}
 
 interface SummaryMetric {
   label: string;
@@ -42,7 +46,7 @@ export function RunSummary({ result }: Props) {
       <div className="resultHeader">
         <div>
           <span className="sourceLine"><ShieldCheck size={16} /> Backtest result</span>
-          <h2>{objectiveTitle(result)}</h2>
+          <h2>{result.request.start_date} to {result.request.end_date}</h2>
         </div>
         <button className="secondaryButton" onClick={() => downloadJson(result)} type="button">
           <Download size={16} /> Result JSON
@@ -72,19 +76,19 @@ export function RunSummary({ result }: Props) {
 
 function SummaryTab({ result, setActiveTab }: { result: BacktestResult; setActiveTab: (tab: OutputTab) => void }) {
   const m = result.summary;
-  const objectiveMetrics = summaryMetrics(result);
+  const metrics = summaryMetrics(result);
   return (
     <div className="tabStack">
       <section className="chartPanel">
-        <h3>{objectiveTitle(result)} Summary</h3>
-        <p className="summaryText">{objectiveNarrative(result)}</p>
+        <h3>Run summary</h3>
+        <p className="summaryText">{resultNarrative(result)}</p>
       </section>
       <div className="metricGrid">
-        {objectiveMetrics.map((metric) => <Metric key={metric.label} label={metric.label} value={metric.value} sub={metric.sub} />)}
+        {metrics.map((metric) => <Metric key={metric.label} label={metric.label} value={metric.value} sub={metric.sub} />)}
       </div>
       <section className="chartPanel">
-        <h3>Objective checklist</h3>
-        <DataTable section={{ title: "", rows: objectiveChecklist(result) }} compact />
+        <h3>Result checklist</h3>
+        <DataTable section={{ title: "", rows: resultChecklist(result) }} compact />
       </section>
       <section className="chartPanel">
         <h3>Always-on analysis</h3>
@@ -97,7 +101,7 @@ function SummaryTab({ result, setActiveTab }: { result: BacktestResult; setActiv
       </section>
       <AxisCurve title="Portfolio vs Benchmark Growth" series={[
         { label: "Portfolio", points: result.equity_curve, color: "#5b21d6", valueFormat: money.format },
-        { label: "Benchmark", points: result.benchmark_curve, color: "#7c3aed", valueFormat: money.format }
+        { label: "Benchmark", points: result.benchmark_curve, color: "#0ea5e9", valueFormat: money.format }
       ]} valueFormat={money.format} />
     </div>
   );
@@ -153,8 +157,8 @@ function GrowthTab({ result }: { result: BacktestResult }) {
       </div>
       <AxisCurve title="Portfolio growth path" series={[
         { label: "Portfolio", points: result.equity_curve, color: "#5b21d6", valueFormat: money.format },
-        { label: "Benchmark", points: result.benchmark_curve, color: "#7c3aed", valueFormat: money.format },
-        { label: "Net invested", points: netInvested, color: "#637083", dashed: true, valueFormat: money.format }
+        { label: "Benchmark", points: result.benchmark_curve, color: "#0ea5e9", valueFormat: money.format },
+        { label: "Net invested", points: netInvested, color: "#6b7280", dashed: true, valueFormat: money.format }
       ]} valueFormat={money.format} />
       <section className="chartPanel">
         <h3>Value milestones</h3>
@@ -162,7 +166,7 @@ function GrowthTab({ result }: { result: BacktestResult }) {
       </section>
       <AxisCurve title="Rolling 12M return and volatility" series={[
         { label: "Rolling return", points: derived.rolling.map((row) => ({ date: row.date, value: row.return })), color: "#5b21d6", valueFormat: pct.format },
-        { label: "Rolling volatility", points: derived.rolling.map((row) => ({ date: row.date, value: row.volatility })), color: "#7c3aed", valueFormat: pct.format }
+        { label: "Rolling volatility", points: derived.rolling.map((row) => ({ date: row.date, value: row.volatility })), color: "#0ea5e9", valueFormat: pct.format }
       ]} valueFormat={pct.format} />
       <section className="chartPanel">
         <h3>Rolling 12M table</h3>
@@ -182,7 +186,7 @@ function DrawdownTab({ result }: { result: BacktestResult }) {
         <Metric label="Stress -10%" value={money.format(result.summary.ending_value * 0.9)} />
       </div>
       <AxisCurve title="Drawdown path" series={[
-        { label: "Portfolio drawdown", points: result.drawdown_curve, color: "#b42318", valueFormat: pct.format }
+        { label: "Portfolio drawdown", points: result.drawdown_curve, color: "#b42318", area: true, valueFormat: pct.format }
       ]} valueFormat={pct.format} />
       <section className="chartPanel">
         <h3>Drawdown stress scenarios</h3>
@@ -237,7 +241,7 @@ function MetricsTab({ result }: { result: BacktestResult }) {
       </section>
       <section className="chartPanel">
         <h3>Asset risk and allocation</h3>
-        <DataTable section={{ title: "", rows: assetRows(result, derived) }} />
+        <DataTable section={{ title: "", rows: assetRows(result) }} />
       </section>
       <section className="chartPanel">
         <h3>Diversification Check</h3>
@@ -257,7 +261,7 @@ function MetricsTab({ result }: { result: BacktestResult }) {
 
 function CashflowsTab({ result }: { result: BacktestResult }) {
   if (!result.request.cashflow.enabled) {
-    return <div className="emptyState">Cashflows are disabled for this objective/run.</div>;
+    return <div className="emptyState">Cashflows are disabled for this run.</div>;
   }
   return (
     <div className="tabStack">
@@ -303,28 +307,94 @@ function RebalancingTab({ result }: { result: BacktestResult }) {
 }
 
 function ReportTab({ result }: { result: BacktestResult }) {
-  const rows = reportRows(result);
+  const derived = deriveResult(result);
+  const hasCashflow = result.request.cashflow.enabled;
+  const hasRebalancing = result.request.rebalancing.mode !== "none";
   return (
     <div className="tabStack">
       <section className="chartPanel">
         <h3>Export</h3>
         <div className="exportActions">
-          <button className="secondaryButton" onClick={() => downloadText("report.md", reportMarkdown(rows), "text/markdown")} type="button">report.md</button>
+          <button className="secondaryButton" onClick={() => downloadText("report.md", reportMarkdown(result, derived), "text/markdown")} type="button">report.md</button>
           <button className="secondaryButton" onClick={() => downloadText("run_config.json", JSON.stringify(result.request, null, 2), "application/json")} type="button">run_config.json</button>
           <button className="secondaryButton" onClick={() => downloadText("metrics.json", JSON.stringify(result.summary, null, 2), "application/json")} type="button">metrics.json</button>
         </div>
       </section>
+
       <section className="reportPanel">
-        <h3>CQF Report Draft</h3>
-        {rows.map((row) => (
-          <section key={row.section}>
-            <strong>{row.section}</strong>
-            <p>{row.detail}</p>
-          </section>
-        ))}
+        <h3>CQF Research Report &mdash; {result.request.start_date} to {result.request.end_date}</h3>
+        <p className="footnote">Run {result.run_id} &middot; generated {result.created_at} &middot; SEC Open Data, NAV per unit</p>
+
+        <ReportSection title="1. Research question">
+          <p>{resultNarrative(result)}</p>
+        </ReportSection>
+
+        <ReportSection title="2. Data and methodology">
+          <p>All returns are computed from cached SEC Open Data mutual fund NAV series (month-end frequency, {"m"} = 12 periods/year). No mock, simulated, or forecast price series are used. Fund period returns use simple returns r_t = NAV_t / NAV_(t-1) - 1; missing NAV observations are never forward-filled into a fabricated return. Portfolio time-weighted return removes external cashflows using the configured timing so contributions/withdrawals do not themselves create investment return.</p>
+        </ReportSection>
+
+        <ReportSection title="3. Portfolio specification">
+          <DataTable section={{ title: "", rows: assumptionRows(result) }} compact />
+        </ReportSection>
+
+        <ReportSection title="4. Performance results">
+          <DataTable section={{ title: "", rows: keyMetricRows(result) }} />
+        </ReportSection>
+
+        <ReportSection title="5. Risk and benchmark analysis">
+          <DataTable section={result.risk_metrics} compact />
+          <DataTable section={{ title: "", rows: benchmarkDecompositionRows(result, derived) }} />
+        </ReportSection>
+
+        <ReportSection title="6. Drawdown analysis">
+          <DataTable section={{ title: "", rows: stressRows(result) }} />
+          <DataTable section={{ title: "Worst historical drawdown periods", rows: derived.drawdownPeriods }} />
+        </ReportSection>
+
+        <ReportSection title="7. Diversification and correlation">
+          <DataTable section={result.diversification} compact />
+        </ReportSection>
+
+        <ReportSection title="8. Asset-level attribution">
+          <DataTable section={{ title: "", rows: assetRows(result) }} />
+        </ReportSection>
+
+        {hasCashflow ? (
+          <ReportSection title="9. Cashflow analysis">
+            <DataTable section={{ title: "", rows: yearlyCashflowRows(result) }} compact />
+          </ReportSection>
+        ) : null}
+
+        {hasRebalancing ? (
+          <ReportSection title={hasCashflow ? "10. Rebalancing analysis" : "9. Rebalancing analysis"}>
+            <DataTable
+              section={{
+                title: "",
+                rows: result.rebalances.map((row) => ({ date: row.date, turnover: pct.format(row.turnover), cost: money.format(row.cost) }))
+              }}
+              compact
+            />
+          </ReportSection>
+        ) : null}
+
+        <ReportSection title="Formula reference">
+          <DataTable section={{ title: "", rows: formulaReferenceRows() }} compact />
+        </ReportSection>
+
+        <ReportSection title="Limitations">
+          <p>Historical NAV backtest only &mdash; not a forecast, not investment advice. No tax treatment, individual investor timing, unmodeled fund-specific fee changes, or survivorship-bias correction for delisted funds. Drawdown stress scenarios (Section 6) apply a deterministic shock to ending value and are not a probabilistic simulation.</p>
+        </ReportSection>
       </section>
-      <DataTable section={{ title: "CQF Report Audit Table", rows }} />
     </div>
+  );
+}
+
+function ReportSection({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <strong>{title}</strong>
+      {children}
+    </section>
   );
 }
 
@@ -352,6 +422,7 @@ function AxisCurve({ title, series, valueFormat }: { title: string; series: Char
   const prepared = useMemo(() => prepareSeries(series), [series]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hover, setHover] = useState<{ index: number; x: number; y: number } | null>(null);
+  const gradientId = useId();
 
   function handleMove(event: ReactMouseEvent<SVGRectElement>) {
     const rect = containerRef.current?.getBoundingClientRect();
@@ -389,6 +460,14 @@ function AxisCurve({ title, series, valueFormat }: { title: string; series: Char
       </div>
       <div className="chartCanvas" ref={containerRef}>
         <svg className="axisChart" viewBox="0 0 880 320" role="img" aria-label={title} preserveAspectRatio="none">
+          <defs>
+            {prepared.paths.filter((path) => path.area).map((path) => (
+              <linearGradient id={`${gradientId}-${slugify(path.label)}`} key={path.label} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor={path.color} stopOpacity="0.04" />
+                <stop offset="100%" stopColor={path.color} stopOpacity="0.4" />
+              </linearGradient>
+            ))}
+          </defs>
           {prepared.yTicks.map((tick) => (
             <g key={tick.value}>
               <line className="gridLine" x1="70" x2="850" y1={tick.y} y2={tick.y} />
@@ -403,6 +482,9 @@ function AxisCurve({ title, series, valueFormat }: { title: string; series: Char
           ))}
           <line className="axisLine" x1="70" x2="850" y1="280" y2="280" />
           <line className="axisLine" x1="70" x2="70" y1="24" y2="280" />
+          {prepared.paths.filter((path) => path.area).map((path) => (
+            <path d={path.areaD} key={`${path.label}-area`} stroke="none" style={{ fill: `url(#${gradientId}-${slugify(path.label)})` }} />
+          ))}
           {prepared.paths.map((path) => (
             <path key={path.label} d={path.d} stroke={path.color} strokeDasharray={path.dashed ? "7 7" : undefined} />
           ))}
@@ -540,6 +622,7 @@ interface ChartSeries {
   points: TimeSeriesPoint[];
   color: string;
   dashed?: boolean;
+  area?: boolean;
   valueFormat: (value: number) => string;
 }
 
@@ -728,12 +811,20 @@ function prepareSeries(series: ChartSeries[]) {
   }).reverse();
   const xFor = (index: number, length: number) => 70 + (index / Math.max(1, length - 1)) * 780;
   const yFor = (value: number) => 280 - ((value - min) / range) * 256;
-  const paths = sampledSeries.map((item) => ({
-    label: item.label,
-    color: item.color,
-    dashed: item.dashed,
-    d: item.points.map((point, index) => `${index ? "L" : "M"} ${xFor(index, item.points.length).toFixed(1)} ${yFor(point.value).toFixed(1)}`).join(" ")
-  }));
+  const paths = sampledSeries.map((item) => {
+    const d = item.points.map((point, index) => `${index ? "L" : "M"} ${xFor(index, item.points.length).toFixed(1)} ${yFor(point.value).toFixed(1)}`).join(" ");
+    const baselineY = Math.min(280, Math.max(24, yFor(0)));
+    const firstX = xFor(0, item.points.length).toFixed(1);
+    const lastX = xFor(item.points.length - 1, item.points.length).toFixed(1);
+    return {
+      label: item.label,
+      color: item.color,
+      dashed: item.dashed,
+      area: item.area,
+      d,
+      areaD: item.area && item.points.length ? `${d} L ${lastX} ${baselineY.toFixed(1)} L ${firstX} ${baselineY.toFixed(1)} Z` : ""
+    };
+  });
   const endpoints = sampledSeries.map((item) => {
     const point = lastPoint(item.points) ?? { date: "", value: 0 };
     return {
@@ -770,37 +861,7 @@ function prepareSeries(series: ChartSeries[]) {
 
 function summaryMetrics(result: BacktestResult): SummaryMetric[] {
   const m = result.summary;
-  if (result.request.objective === "monthly_dca") {
-    return [
-      { label: "Total contributed", value: money.format(m.total_contributed) },
-      { label: "Ending value", value: money.format(m.ending_value) },
-      { label: "Net profit", value: money.format(m.ending_value + m.total_withdrawn - m.total_contributed) },
-      { label: "TWRR CAGR", value: pct.format(m.twrr_cagr) },
-      { label: "Max drawdown", value: pct.format(m.max_drawdown) },
-      { label: "Sharpe", value: formatNumber(m.sharpe) }
-    ];
-  }
-  if (result.request.objective === "monthly_withdrawal") {
-    return [
-      { label: "Total withdrawn", value: money.format(m.total_withdrawn) },
-      { label: "Ending value", value: money.format(m.ending_value) },
-      { label: "Portfolio status", value: m.ending_value > 0 ? "Survived" : "Depleted" },
-      { label: "Worst drawdown", value: pct.format(m.max_drawdown) },
-      { label: "TWRR CAGR", value: pct.format(m.twrr_cagr) },
-      { label: "Sharpe", value: formatNumber(m.sharpe) }
-    ];
-  }
-  if (result.request.objective === "rebalancing_impact") {
-    return [
-      { label: "Rebalance count", value: String(m.rebalance_count) },
-      { label: "Total costs", value: money.format(m.total_costs) },
-      { label: "Ending value", value: money.format(m.ending_value) },
-      { label: "TWRR CAGR", value: pct.format(m.twrr_cagr) },
-      { label: "Max drawdown", value: pct.format(m.max_drawdown) },
-      { label: "Sharpe", value: formatNumber(m.sharpe) }
-    ];
-  }
-  return [
+  const rows: SummaryMetric[] = [
     { label: "Ending value", value: money.format(m.ending_value) },
     { label: "TWRR CAGR", value: pct.format(m.twrr_cagr) },
     { label: "Volatility", value: pct.format(m.volatility) },
@@ -808,40 +869,56 @@ function summaryMetrics(result: BacktestResult): SummaryMetric[] {
     { label: "Max drawdown", value: pct.format(m.max_drawdown) },
     { label: "Excess vs benchmark", value: formatPercentLike(m.benchmark_excess_return) }
   ];
+  if (result.request.cashflow.enabled) {
+    rows.push(
+      result.request.cashflow.type === "withdrawal"
+        ? { label: "Total withdrawn", value: money.format(m.total_withdrawn), sub: m.ending_value > 0 ? "Survived" : "Depleted" }
+        : { label: "Total contributed", value: money.format(m.total_contributed) }
+    );
+  }
+  if (result.request.rebalancing.mode !== "none") {
+    rows.push({ label: "Rebalance events", value: String(m.rebalance_count), sub: money.format(m.total_costs) + " total cost" });
+  }
+  return rows;
 }
 
-function objectiveNarrative(result: BacktestResult) {
+function resultNarrative(result: BacktestResult) {
   const m = result.summary;
-  if (result.request.objective === "monthly_dca") {
-    return `You contributed ${money.format(m.total_contributed)} through SEC fund NAV history. Ending value was ${money.format(m.ending_value)} with TWRR CAGR ${pct.format(m.twrr_cagr)}.`;
+  const parts = [`Ending value ${money.format(m.ending_value)}, TWRR CAGR ${pct.format(m.twrr_cagr)}, max drawdown ${pct.format(m.max_drawdown)}.`];
+  if (result.request.cashflow.enabled) {
+    parts.push(
+      result.request.cashflow.type === "withdrawal"
+        ? `You withdrew ${money.format(m.total_withdrawn)}; the portfolio ${m.ending_value > 0 ? "remained above zero" : "depleted"}.`
+        : `You contributed ${money.format(m.total_contributed)} through SEC fund NAV history.`
+    );
   }
-  if (result.request.objective === "monthly_withdrawal") {
-    return `You withdrew ${money.format(m.total_withdrawn)}. The portfolio ${m.ending_value > 0 ? "remained above zero" : "depleted"} with ending value ${money.format(m.ending_value)}.`;
+  if (result.request.rebalancing.mode !== "none") {
+    parts.push(`${m.rebalance_count} rebalance events with total modeled costs of ${money.format(m.total_costs)}.`);
   }
-  if (result.request.objective === "rebalancing_impact") {
-    return `The run produced ${m.rebalance_count} rebalance events with total modeled costs of ${money.format(m.total_costs)}.`;
-  }
-  return `Static allocation result: ending value ${money.format(m.ending_value)}, TWRR CAGR ${pct.format(m.twrr_cagr)}, max drawdown ${pct.format(m.max_drawdown)}.`;
+  return parts.join(" ");
 }
 
-function objectiveChecklist(result: BacktestResult) {
+function resultChecklist(result: BacktestResult) {
   const m = result.summary;
-  const base = [
+  const rows = [];
+  if (result.request.cashflow.enabled) {
+    rows.push(
+      result.request.cashflow.type === "withdrawal"
+        ? { question: "Did the portfolio survive withdrawals?", result: m.ending_value > 0 ? "Survived" : "Depleted", evidence_tab: "Cashflows" }
+        : { question: "How much did the investor put in?", result: money.format(m.total_contributed), evidence_tab: "Cashflows" }
+    );
+  }
+  if (result.request.rebalancing.mode !== "none") {
+    rows.push({ question: "How often did the strategy trade?", result: `${m.rebalance_count} events`, evidence_tab: "Rebalancing" });
+  }
+  rows.push(
+    { question: "Did allocation outperform benchmark?", result: `Excess ${formatPercentLike(m.benchmark_excess_return)}`, evidence_tab: "Overview" },
     { question: "Benchmark risk acceptable?", result: `Beta ${formatNumber(findRiskValue(result, "beta"))}, alpha ${formatPercentLike(findRiskValue(result, "alpha"))}`, evidence_tab: "Overview / Metrics" },
     { question: "Worst historical loss visible?", result: `Max drawdown ${pct.format(m.max_drawdown)}`, evidence_tab: "Drawdown" },
     { question: "Diversification visible?", result: `${result.diversification.rows.length} diversification rows`, evidence_tab: "Metrics" },
-    { question: "CQF report ready?", result: "Objective, inputs, formulas, results, limitations", evidence_tab: "Report" }
-  ];
-  if (result.request.objective === "monthly_dca") {
-    return [{ question: "How much did the investor put in?", result: money.format(m.total_contributed), evidence_tab: "Cashflows" }, ...base];
-  }
-  if (result.request.objective === "monthly_withdrawal") {
-    return [{ question: "Did the portfolio survive withdrawals?", result: m.ending_value > 0 ? "Survived" : "Depleted", evidence_tab: "Summary" }, ...base];
-  }
-  if (result.request.objective === "rebalancing_impact") {
-    return [{ question: "How often did the strategy trade?", result: `${m.rebalance_count} events`, evidence_tab: "Rebalancing" }, ...base];
-  }
-  return [{ question: "Did allocation outperform benchmark?", result: `Excess ${formatPercentLike(m.benchmark_excess_return)}`, evidence_tab: "Overview" }, ...base];
+    { question: "CQF report ready?", result: "Inputs, formulas, results, limitations", evidence_tab: "Report" }
+  );
+  return rows;
 }
 
 function assumptionRows(result: BacktestResult) {
@@ -871,7 +948,7 @@ function keyMetricRows(result: BacktestResult) {
     { metric: "Benchmark excess return", value: formatPercentLike(m.benchmark_excess_return), formula: "Cumulative portfolio TWRR - cumulative benchmark return over matched periods" },
     { metric: "Total contributed", value: money.format(m.total_contributed), formula: "Initial capital + sum of applied positive cashflows" },
     { metric: "Total withdrawn", value: money.format(m.total_withdrawn), formula: "Sum of withdrawal cashflow rules" },
-    { metric: "Total costs", value: money.format(m.total_costs), formula: "Turnover * transaction/slippage assumptions plus drag where applicable" }
+    { metric: "Total costs", value: money.format(m.total_costs), formula: "Money value traded * (transaction + slippage bps) summed across rebalances, plus annual drag where applicable" }
   ];
 }
 
@@ -910,18 +987,21 @@ function stressRows(result: BacktestResult) {
   }));
 }
 
-function reportRows(result: BacktestResult) {
+function formulaReferenceRows() {
   return [
-    { section: "Objective", detail: objectiveTitle(result) },
-    { section: "Data", detail: "SEC Open Data cached fund NAV only; no mock market series in production output." },
-    { section: "Inputs", detail: assumptionRows(result).map((row) => `${row.input}: ${row.value}`).join(" | ") },
-    { section: "Performance Results", detail: `Ending value ${money.format(result.summary.ending_value)}, TWRR CAGR ${pct.format(result.summary.twrr_cagr)}, volatility ${pct.format(result.summary.volatility)}, Sharpe ${formatNumber(result.summary.sharpe)}.` },
-    { section: "Benchmark Risk", detail: `Benchmark ${result.request.benchmark_proj_id}; beta ${formatNumber(findRiskValue(result, "beta"))}; alpha ${formatPercentLike(findRiskValue(result, "alpha"))}; tracking error ${formatPercentLike(findRiskValue(result, "tracking_error"))}.` },
-    { section: "Drawdown Stress", detail: `Maximum drawdown ${pct.format(result.summary.max_drawdown)}; stress table is computed from ending value and historical drawdown.` },
-    { section: "Diversification Check", detail: `${result.diversification.rows.length} diversification rows reviewed from aligned SEC return series.` },
-    { section: "Rebalancing and Cashflows", detail: `Cashflow events ${result.summary.cashflow_count}; rebalance events ${result.summary.rebalance_count}; total costs ${money.format(result.summary.total_costs)}.` },
-    { section: "CQF Formula Notes", detail: result.formula_references.join("; ") },
-    { section: "Limitations", detail: "Historical NAV backtest; no forecast, tax, individual investor timing, or unmodeled fund-specific fee changes." }
+    { metric: "Simple return", formula: "r_t = NAV_t / NAV_(t-1) - 1" },
+    { metric: "Time-weighted return (TWRR)", formula: "TWRR = Prod(1 + r_t) - 1, cashflow periods excluded from r_t" },
+    { metric: "TWRR CAGR", formula: "(1 + TWRR)^(1/years) - 1" },
+    { metric: "Annualized volatility", formula: "Std(monthly returns, population) * sqrt(12)" },
+    { metric: "Sharpe ratio", formula: "(Annualized return - risk-free rate) / annualized volatility" },
+    { metric: "Maximum drawdown", formula: "min(Value_t / running_peak_t - 1)" },
+    { metric: "Beta", formula: "Cov(portfolio, benchmark) / Var(benchmark), sample" },
+    { metric: "Alpha (CAPM residual)", formula: "portfolio CAGR - (risk-free + beta * (benchmark CAGR - risk-free))" },
+    { metric: "Tracking error", formula: "Std(portfolio_return - benchmark_return) * sqrt(12)" },
+    { metric: "Information ratio", formula: "(portfolio CAGR - benchmark CAGR) / tracking error" },
+    { metric: "Correlation", formula: "Pearson correlation of aligned monthly returns" },
+    { metric: "Rebalance turnover", formula: "sum(|target_value_i - current_value_i|) / 2 / portfolio_value, one-way fraction" },
+    { metric: "Rebalance cost", formula: "money turnover * (transaction_bps + slippage_bps) / 10,000" }
   ];
 }
 
@@ -943,17 +1023,15 @@ function stressInterpretationRows(result: BacktestResult, derived: ReturnType<ty
   ];
 }
 
-function assetRows(result: BacktestResult, derived: ReturnType<typeof deriveResult>) {
-  return result.request.assets.map((asset) => ({
-    fund: asset.display_name,
-    proj_id: asset.proj_id,
-    target: `${asset.weight.toFixed(1)}%`,
-    final: `${asset.weight.toFixed(1)}%`,
-    drift: "0.0%",
-    portfolio_window_cagr: pct.format(result.summary.twrr_cagr),
-    portfolio_window_vol: pct.format(result.summary.volatility),
-    benchmark_corr_source: `${result.diversification.rows.length} pair row(s)`,
-    note: derived.monthlyRows.length ? "Asset-level final holdings are not returned by backend yet; target weights shown from submitted SEC request." : "No return rows"
+function assetRows(result: BacktestResult) {
+  return result.asset_metrics.rows.map((row) => ({
+    fund: row.fund,
+    proj_id: row.proj_id,
+    target: pct.format(asNumber(row.target_weight_pct) / 100),
+    final: pct.format(asNumber(row.final_weight_pct) / 100),
+    drift: formatPercentLike(asNumber(row.drift_pct) / 100),
+    cagr: pct.format(asNumber(row.cagr)),
+    volatility: pct.format(asNumber(row.volatility))
   }));
 }
 
@@ -1039,10 +1117,6 @@ function formatPercentLike(value: number | null) {
   return value == null || Number.isNaN(value) ? "n/a" : pct.format(value);
 }
 
-function objectiveTitle(result: BacktestResult) {
-  return String(result.objective_summary.objective ?? result.request.objective).replace(/_/g, " ");
-}
-
 function lastDate(points: TimeSeriesPoint[]) {
   return lastPoint(points)?.date ?? "";
 }
@@ -1064,8 +1138,54 @@ function downloadJson(result: BacktestResult) {
   downloadText(`${result.run_id}.json`, JSON.stringify(result, null, 2), "application/json");
 }
 
-function reportMarkdown(rows: { section: string; detail: string }[]) {
-  return rows.map((row) => `## ${row.section}\n\n${row.detail}`).join("\n\n");
+function reportMarkdown(result: BacktestResult, derived: ReturnType<typeof deriveResult>) {
+  const hasCashflow = result.request.cashflow.enabled;
+  const hasRebalancing = result.request.rebalancing.mode !== "none";
+  const sections: { title: string; body: string }[] = [
+    { title: "1. Research question", body: resultNarrative(result) },
+    {
+      title: "2. Data and methodology",
+      body: "All returns are computed from cached SEC Open Data mutual fund NAV series (month-end frequency, m = 12 periods/year). No mock, simulated, or forecast price series are used. Fund period returns use simple returns r_t = NAV_t / NAV_(t-1) - 1; missing NAV observations are never forward-filled into a fabricated return. Portfolio time-weighted return removes external cashflows using the configured timing so contributions/withdrawals do not themselves create investment return."
+    },
+    { title: "3. Portfolio specification", body: markdownTable(assumptionRows(result)) },
+    { title: "4. Performance results", body: markdownTable(keyMetricRows(result)) },
+    {
+      title: "5. Risk and benchmark analysis",
+      body: `${markdownTable(result.risk_metrics.rows)}\n\n${markdownTable(benchmarkDecompositionRows(result, derived))}`
+    },
+    {
+      title: "6. Drawdown analysis",
+      body: `${markdownTable(stressRows(result))}\n\n${markdownTable(derived.drawdownPeriods)}`
+    },
+    { title: "7. Diversification and correlation", body: markdownTable(result.diversification.rows) },
+    { title: "8. Asset-level attribution", body: markdownTable(assetRows(result)) }
+  ];
+  if (hasCashflow) {
+    sections.push({ title: "9. Cashflow analysis", body: markdownTable(yearlyCashflowRows(result)) });
+  }
+  if (hasRebalancing) {
+    sections.push({
+      title: hasCashflow ? "10. Rebalancing analysis" : "9. Rebalancing analysis",
+      body: markdownTable(result.rebalances.map((row) => ({ date: row.date, turnover: pct.format(row.turnover), cost: money.format(row.cost) })))
+    });
+  }
+  sections.push({ title: "Formula reference", body: markdownTable(formulaReferenceRows()) });
+  sections.push({
+    title: "Limitations",
+    body: "Historical NAV backtest only — not a forecast, not investment advice. No tax treatment, individual investor timing, unmodeled fund-specific fee changes, or survivorship-bias correction for delisted funds. Drawdown stress scenarios apply a deterministic shock to ending value and are not a probabilistic simulation."
+  });
+
+  const header = `# CQF Research Report — ${result.request.start_date} to ${result.request.end_date}\n\nRun ${result.run_id} — generated ${result.created_at} — SEC Open Data, NAV per unit`;
+  return [header, ...sections.map((section) => `## ${section.title}\n\n${section.body}`)].join("\n\n");
+}
+
+function markdownTable(rows: Record<string, unknown>[]) {
+  if (!rows.length) return "_No rows._";
+  const columns = Object.keys(rows[0]);
+  const header = `| ${columns.map(humanize).join(" | ")} |`;
+  const divider = `| ${columns.map(() => "---").join(" | ")} |`;
+  const body = rows.map((row) => `| ${columns.map((column) => String(row[column] ?? "")).join(" | ")} |`).join("\n");
+  return [header, divider, body].join("\n");
 }
 
 function downloadText(filename: string, content: string, type: string) {

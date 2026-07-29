@@ -7,7 +7,6 @@ from backend.app.engine.backtest import run_backtest
 
 def monthly_dca_request():
     return BacktestRequest(
-        objective="monthly_dca",
         assets=[
             {"proj_id": "FUND_A", "display_name": "Fund A", "weight": 50},
             {"proj_id": "FUND_B", "display_name": "Fund B", "weight": 50},
@@ -33,7 +32,6 @@ def backtest_request(
     end_date="2020-03-31",
 ):
     return BacktestRequest(
-        objective="rebalancing_impact",
         assets=[
             {"proj_id": "FUND_A", "display_name": "Fund A", "weight": 50},
             {"proj_id": "FUND_B", "display_name": "Fund B", "weight": 50},
@@ -67,7 +65,6 @@ def test_sec_nav_backtest_with_monthly_dca():
     assert result["summary"]["cashflow_count"] == 3
     assert result["summary"]["rebalance_count"] == 3
     assert len(result["equity_curve"]) == 4
-    assert result["objective_summary"]["objective"] == "monthly_dca"
 
 
 def test_backtest_deducts_rebalance_costs():
@@ -224,6 +221,47 @@ def test_missing_benchmark_nav_periods_do_not_become_comparisons():
 def test_incomplete_selected_asset_months_are_rejected(nav):
     with pytest.raises(ValueError, match="incomplete selected-asset NAV periods: 2020-02"):
         run_backtest(backtest_request(), nav)
+
+
+def test_asset_metrics_report_real_final_weight_and_drift_no_rebalancing():
+    request = backtest_request(cashflow_enabled=False)
+    payload = request.model_dump(mode="json")
+    payload["rebalancing"] = {"mode": "none"}
+    request = BacktestRequest(**payload)
+    # FUND_A doubles, FUND_B is flat, so with no rebalancing the 50/50 target
+    # must drift toward FUND_A: final value = [1000, 500], total 1500.
+    nav = pd.DataFrame(
+        {"FUND_A": [10, 20, 20], "FUND_B": [20, 20, 20]},
+        index=pd.to_datetime(["2020-01-31", "2020-02-29", "2020-03-31"]),
+    )
+
+    result = run_backtest(request, nav)
+
+    rows = {row["proj_id"]: row for row in result["asset_metrics"]["rows"]}
+    assert rows["FUND_A"]["target_weight_pct"] == pytest.approx(50)
+    assert rows["FUND_A"]["final_weight_pct"] == pytest.approx(1000 / 1500 * 100)
+    assert rows["FUND_A"]["drift_pct"] == pytest.approx(1000 / 1500 * 100 - 50)
+    assert rows["FUND_B"]["final_weight_pct"] == pytest.approx(500 / 1500 * 100)
+    assert rows["FUND_B"]["drift_pct"] == pytest.approx(500 / 1500 * 100 - 50)
+    # FUND_A's own CAGR must differ from FUND_B's — these are per-asset, not the portfolio figure.
+    assert rows["FUND_A"]["cagr"] != pytest.approx(rows["FUND_B"]["cagr"])
+
+
+def test_rebalance_turnover_is_a_fraction_of_portfolio_value_not_raw_money():
+    payload = backtest_request(cashflow_enabled=False, end_date="2020-02-29").model_dump(mode="json")
+    payload["rebalancing"] = {"mode": "monthly"}
+    request = BacktestRequest(**payload)
+    nav = pd.DataFrame(
+        {"FUND_A": [10, 12], "FUND_B": [20, 20]},
+        index=pd.to_datetime(["2020-01-31", "2020-02-29"]),
+    )
+
+    result = run_backtest(request, nav)
+
+    # values drift to [600, 500] (total 1100) before rebalancing back to [550, 550];
+    # one-way money turnover is 50, so the ratio must be 50/1100, not the raw 50.
+    assert result["rebalances"][0]["turnover"] == pytest.approx(50 / 1100)
+    assert result["rebalances"][0]["turnover"] < 1
 
 
 @pytest.mark.parametrize(

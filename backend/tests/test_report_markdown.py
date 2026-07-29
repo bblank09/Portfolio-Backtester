@@ -3,7 +3,7 @@ from backend.app.reports.markdown import render_cqf_report
 
 def test_report_mentions_sec_open_data_and_limitations():
     report = render_cqf_report(
-        request={"objective": "past_performance", "assets": [{"proj_id": "FUND_A", "weight": 100}]},
+        request={"assets": [{"proj_id": "FUND_A", "weight": 100}]},
         result={"summary": {"ending_value": 1200, "twrr_cagr": 0.1, "max_drawdown": -0.2}},
         manifest={"source": "SEC Open Data", "nav_rows": 1000},
         quality_issues=[],
@@ -16,7 +16,7 @@ def test_report_mentions_sec_open_data_and_limitations():
 
 def test_report_documents_current_reproducibility_command_and_scope():
     report = render_cqf_report(
-        request={"objective": "past_performance", "assets": [{"proj_id": "FUND_A", "weight": 100}]},
+        request={"assets": [{"proj_id": "FUND_A", "weight": 100}]},
         result={"run_id": "saved-run", "summary": {}},
         manifest={"source": "SEC Open Data"},
         quality_issues=[],
@@ -30,7 +30,7 @@ def test_report_documents_current_reproducibility_command_and_scope():
 
 def test_report_formula_reference_contains_real_equations():
     report = render_cqf_report(
-        request={"objective": "past_performance", "assets": [{"proj_id": "FUND_A", "weight": 100}]},
+        request={"assets": [{"proj_id": "FUND_A", "weight": 100}]},
         result={"summary": {"ending_value": 1200, "twrr_cagr": 0.1, "max_drawdown": -0.2}},
         manifest={"source": "SEC Open Data", "nav_rows": 1000},
         quality_issues=[],

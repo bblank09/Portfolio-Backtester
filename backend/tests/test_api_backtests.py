@@ -91,7 +91,6 @@ def create_sample_backtest() -> dict:
     first = universe.loc[universe["proj_id"] == first_proj_id].iloc[0]
     second = universe.loc[universe["proj_id"] == second_proj_id].iloc[0]
     payload = {
-        "objective": "past_performance",
         "assets": [
             {"proj_id": first["proj_id"], "display_name": first["display_name"], "weight": 50},
             {"proj_id": second["proj_id"], "display_name": second["display_name"], "weight": 50},

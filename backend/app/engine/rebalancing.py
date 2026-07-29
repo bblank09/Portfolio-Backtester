@@ -15,8 +15,9 @@ def rebalance_due(current_date: pd.Timestamp, previous_date: pd.Timestamp | None
     return False
 
 
-def rebalance_values(values: pd.Series, target_weights: pd.Series) -> tuple[pd.Series, float]:
+def rebalance_values(values: pd.Series, target_weights: pd.Series) -> tuple[pd.Series, float, float]:
     total = float(values.sum())
     target_values = target_weights * total
-    turnover = float((target_values - values).abs().sum() / 2)
-    return target_values, turnover
+    money_turnover = float((target_values - values).abs().sum() / 2)
+    turnover_ratio = money_turnover / total if total else 0.0
+    return target_values, turnover_ratio, money_turnover
