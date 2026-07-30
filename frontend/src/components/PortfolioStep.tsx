@@ -15,6 +15,16 @@ interface Facet {
   count: number;
 }
 
+const CATEGORY_LABELS_EN: Record<string, string> = {
+  "ตราสารทุน": "Equity",
+  "ตราสารหนี้": "Fixed Income",
+  "ผสม": "Mixed"
+};
+
+function categoryLabel(value: string) {
+  return CATEGORY_LABELS_EN[value] ?? value;
+}
+
 function buildFacets(funds: SecFund[], field: "amc_name_en" | "policy_desc", otherFilter: Set<string>, otherField: "amc_name_en" | "policy_desc") {
   const counts = new Map<string, number>();
   for (const fund of funds) {
@@ -312,7 +322,7 @@ function HoldingsRow({
                     <FacetGroup label="AMC" facets={amcFacets} selected={amcFilter} onToggle={onToggleAmc} />
                   ) : null}
                   {categoryFacets.length ? (
-                    <FacetGroup label="Fund category" facets={categoryFacets} selected={categoryFilter} onToggle={onToggleCategory} />
+                    <FacetGroup facets={categoryFacets} formatLabel={categoryLabel} label="Fund category" onToggle={onToggleCategory} selected={categoryFilter} />
                   ) : null}
                 </div>
               ) : null}
@@ -351,16 +361,18 @@ function FacetGroup({
   label,
   facets,
   selected,
-  onToggle
+  onToggle,
+  formatLabel = (value: string) => value
 }: {
   label: string;
   facets: Facet[];
   selected: Set<string>;
   onToggle: (value: string) => void;
+  formatLabel?: (value: string) => string;
 }) {
   const [query, setQuery] = useState("");
   const visible = query.trim()
-    ? facets.filter((facet) => facet.value.toLowerCase().includes(query.trim().toLowerCase()))
+    ? facets.filter((facet) => formatLabel(facet.value).toLowerCase().includes(query.trim().toLowerCase()))
     : facets;
   const showSearch = facets.length > 6;
 
@@ -390,7 +402,7 @@ function FacetGroup({
               onMouseDown={(event) => event.stopPropagation()}
               type="checkbox"
             />
-            <span className="filter-check-label">{facet.value}</span>
+            <span className="filter-check-label">{formatLabel(facet.value)}</span>
             <span className="filter-check-count">{facet.count}</span>
           </label>
         ))}
