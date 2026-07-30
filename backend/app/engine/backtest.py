@@ -262,5 +262,13 @@ def diversification_table(asset_returns: pd.DataFrame) -> dict[str, Any]:
     for left in corr.index:
         for right in corr.columns:
             if left < right:
-                rows.append({"asset_a": left, "asset_b": right, "correlation": float(corr.loc[left, right])})
+                pair = float(corr.loc[left, right])
+                # Undefined against a zero-variance asset; report null, not NaN.
+                rows.append(
+                    {
+                        "asset_a": left,
+                        "asset_b": right,
+                        "correlation": pair if np.isfinite(pair) else None,
+                    }
+                )
     return {"title": "Diversification Check", "rows": rows}

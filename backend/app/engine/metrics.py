@@ -1,6 +1,13 @@
 import numpy as np
 import pandas as pd
 
+# Computed statistics never land on exactly 0.0: pct_change on float NAVs leaves
+# last-bit residue (a constant +10% series yields a std of ~1e-16). Guarding
+# ratio denominators with `== 0` therefore never fires and the ratio explodes to
+# ~1e15. Anything below this tolerance is economically indistinguishable from
+# zero, so treat it as degenerate.
+DEGENERACY_TOLERANCE = 1e-12
+
 
 def annualized_return(returns: pd.Series, periods_per_year: int) -> float:
     clean = returns.dropna()
@@ -14,9 +21,11 @@ def annualized_return(returns: pd.Series, periods_per_year: int) -> float:
 
 def annualized_volatility(returns: pd.Series, periods_per_year: int) -> float:
     clean = returns.dropna()
-    if clean.empty:
+    # ddof=1 (Bessel) is the unbiased sample estimator and matches the ddof used
+    # by cov/var in beta_alpha, so Sharpe and beta rest on the same statistics.
+    if len(clean) < 2:
         return 0.0
-    return float(clean.std(ddof=0) * np.sqrt(periods_per_year))
+    return float(clean.std(ddof=1) * np.sqrt(periods_per_year))
 
 
 def downside_deviation(returns: pd.Series, periods_per_year: int, minimum_acceptable_return: float = 0.0) -> float:
@@ -27,14 +36,14 @@ def downside_deviation(returns: pd.Series, periods_per_year: int, minimum_accept
 
 def sharpe_ratio(returns: pd.Series, risk_free_rate: float, periods_per_year: int) -> float | None:
     volatility = annualized_volatility(returns, periods_per_year)
-    if volatility == 0:
+    if volatility <= DEGENERACY_TOLERANCE:
         return None
     return float((annualized_return(returns, periods_per_year) - risk_free_rate) / volatility)
 
 
 def sortino_ratio(returns: pd.Series, risk_free_rate: float, periods_per_year: int) -> float | None:
     downside = downside_deviation(returns, periods_per_year)
-    if downside == 0:
+    if downside <= DEGENERACY_TOLERANCE:
         return None
     return float((annualized_return(returns, periods_per_year) - risk_free_rate) / downside)
 
@@ -53,7 +62,7 @@ def drawdown_series(values: pd.Series) -> pd.Series:
 
 def calmar_ratio(returns: pd.Series, values: pd.Series, periods_per_year: int) -> float | None:
     drawdown = abs(max_drawdown(values))
-    if drawdown == 0:
+    if drawdown <= DEGENERACY_TOLERANCE:
         return None
     return float(annualized_return(returns, periods_per_year) / drawdown)
 
@@ -67,7 +76,8 @@ def beta_alpha(
     aligned = pd.concat([portfolio, benchmark], axis=1).dropna()
     aligned.columns = ["portfolio", "benchmark"]
     variance = aligned["benchmark"].var(ddof=1)
-    beta = 0.0 if variance == 0 else float(aligned["portfolio"].cov(aligned["benchmark"]) / variance)
+    degenerate = not np.isfinite(variance) or variance <= DEGENERACY_TOLERANCE
+    beta = 0.0 if degenerate else float(aligned["portfolio"].cov(aligned["benchmark"]) / variance)
     port_cagr = annualized_return(aligned["portfolio"], periods_per_year)
     bench_cagr = annualized_return(aligned["benchmark"], periods_per_year)
     alpha = port_cagr - (risk_free_rate + beta * (bench_cagr - risk_free_rate))
@@ -76,15 +86,15 @@ def beta_alpha(
 
 def tracking_error(portfolio: pd.Series, benchmark: pd.Series, periods_per_year: int) -> float:
     aligned = pd.concat([portfolio, benchmark], axis=1).dropna()
-    if aligned.empty:
+    if len(aligned) < 2:
         return 0.0
     active_returns = aligned.iloc[:, 0] - aligned.iloc[:, 1]
-    return float(active_returns.std(ddof=0) * np.sqrt(periods_per_year))
+    return float(active_returns.std(ddof=1) * np.sqrt(periods_per_year))
 
 
 def information_ratio(portfolio: pd.Series, benchmark: pd.Series, periods_per_year: int) -> float | None:
     te = tracking_error(portfolio, benchmark, periods_per_year)
-    if te == 0:
+    if te <= DEGENERACY_TOLERANCE:
         return None
     active_return = annualized_return(portfolio, periods_per_year) - annualized_return(benchmark, periods_per_year)
     return float(active_return / te)
@@ -94,4 +104,7 @@ def correlation(portfolio: pd.Series, benchmark: pd.Series) -> float | None:
     aligned = pd.concat([portfolio, benchmark], axis=1).dropna()
     if len(aligned) < 2:
         return None
-    return float(aligned.iloc[:, 0].corr(aligned.iloc[:, 1]))
+    # Correlation divides by each series' standard deviation, so it is
+    # undefined (0/0 -> NaN) when either side has no variance.
+    value = float(aligned.iloc[:, 0].corr(aligned.iloc[:, 1]))
+    return None if not np.isfinite(value) else value
