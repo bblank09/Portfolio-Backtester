@@ -7,9 +7,9 @@ interface Props {
   result: BacktestResult | null;
 }
 
-type OutputTab = "Summary" | "Overview" | "Growth" | "Drawdown" | "Returns" | "Metrics" | "Cashflows" | "Rebalancing" | "Report";
+type OutputTab = "Summary" | "Growth" | "Drawdown" | "Returns" | "Metrics" | "Cashflows" | "Rebalancing" | "Report";
 
-const outputTabs: OutputTab[] = ["Summary", "Overview", "Growth", "Drawdown", "Returns", "Metrics", "Cashflows", "Rebalancing", "Report"];
+const outputTabs: OutputTab[] = ["Summary", "Growth", "Drawdown", "Returns", "Metrics", "Cashflows", "Rebalancing", "Report"];
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 const pct = new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 2 });
@@ -67,7 +67,6 @@ export function RunSummary({ result }: Props) {
       </nav>
 
       {activeTab === "Summary" ? <SummaryTab result={result} setActiveTab={setActiveTab} /> : null}
-      {activeTab === "Overview" ? <OverviewTab result={result} /> : null}
       {activeTab === "Growth" ? <GrowthTab result={result} /> : null}
       {activeTab === "Drawdown" ? <DrawdownTab result={result} /> : null}
       {activeTab === "Returns" ? <ReturnsTab result={result} /> : null}
@@ -98,7 +97,7 @@ function SummaryTab({ result, setActiveTab }: { result: BacktestResult; setActiv
       <section className="chartPanel">
         <h3>Always-on analysis</h3>
         <div className="alwaysOnGrid">
-          <ClickableMetric label="Benchmark Risk" value={`Beta ${formatNumber(findRiskValue(result, "beta"))}`} sub={`Alpha ${formatPercentLike(findRiskValue(result, "alpha"))} · TE ${formatPercentLike(findRiskValue(result, "tracking_error"))}`} onClick={() => setActiveTab("Overview")} />
+          <ClickableMetric label="Benchmark Risk" value={`Beta ${formatNumber(findRiskValue(result, "beta"))}`} sub={`Alpha ${formatPercentLike(findRiskValue(result, "alpha"))} · TE ${formatPercentLike(findRiskValue(result, "tracking_error"))}`} onClick={() => setActiveTab("Metrics")} />
           <ClickableMetric label="Drawdown Stress" value={pct.format(m.max_drawdown)} sub="Worst historical loss and stress values" onClick={() => setActiveTab("Drawdown")} />
           <ClickableMetric label="Diversification" value={`${result.diversification.rows.length} rows`} sub="Correlation and concentration checks" onClick={() => setActiveTab("Metrics")} />
           <ClickableMetric label="CQF Report" value="Ready" sub="Method, formulas, caveats" onClick={() => setActiveTab("Report")} />
@@ -108,43 +107,6 @@ function SummaryTab({ result, setActiveTab }: { result: BacktestResult; setActiv
         { label: "Portfolio", points: result.equity_curve, color: "#5b21d6", valueFormat: money.format },
         { label: "Benchmark", points: result.benchmark_curve, color: "#0ea5e9", valueFormat: money.format }
       ]} valueFormat={money.format} />
-    </div>
-  );
-}
-
-function OverviewTab({ result }: { result: BacktestResult }) {
-  const m = result.summary;
-  const derived = deriveResult(result);
-  return (
-    <div className="tabStack">
-      <div className="metricGrid">
-        <Metric label="Ending value" value={money.format(m.ending_value)} />
-        <Metric label="Total return (TWRR)" value={pct.format(m.twrr)} />
-        <Metric label="CAGR (TWRR)" value={pct.format(m.twrr_cagr)} />
-        <Metric label="Volatility" value={pct.format(m.volatility)} />
-        <Metric label="Sharpe" value={formatNumber(m.sharpe)} />
-        <Metric label="Max drawdown" value={pct.format(m.max_drawdown)} />
-        <Metric label="Benchmark excess" value={formatPercentLike(m.benchmark_excess_return)} />
-        <Metric label="Total costs" value={money.format(m.total_costs)} />
-        <Metric label="Contributed" value={money.format(m.total_contributed)} />
-        <Metric label="Withdrawn" value={money.format(m.total_withdrawn)} />
-        <Metric label="Cashflow events" value={String(m.cashflow_count)} />
-        <Metric label="Rebalance events" value={String(m.rebalance_count)} />
-      </div>
-      <section className="chartPanel">
-        <h3>Trailing performance</h3>
-        <DataTable section={{ title: "", rows: derived.trailingReturns }} />
-      </section>
-      <div className="panelGrid">
-        <section className="chartPanel">
-        <h3>Run assumptions</h3>
-        <DataTable section={{ title: "", rows: assumptionRows(result) }} compact />
-        </section>
-        <section className="chartPanel">
-        <h3>Benchmark risk decomposition</h3>
-          <DataTable section={{ title: "", rows: benchmarkDecompositionRows(result, derived) }} />
-        </section>
-      </div>
     </div>
   );
 }
@@ -168,6 +130,10 @@ function GrowthTab({ result }: { result: BacktestResult }) {
       <section className="chartPanel">
         <h3>Value milestones</h3>
         <DataTable section={{ title: "", rows: milestoneRows(result, netInvested) }} />
+      </section>
+      <section className="chartPanel">
+        <h3>Trailing performance</h3>
+        <DataTable section={{ title: "", rows: derived.trailingReturns }} />
       </section>
       <AxisCurve title="Rolling 12M return and volatility" series={[
         { label: "Rolling return", points: derived.rolling.map((row) => ({ date: row.date, value: row.return })), color: "#5b21d6", valueFormat: pct.format },
@@ -250,11 +216,11 @@ function MetricsTab({ result }: { result: BacktestResult }) {
       </section>
       <section className="chartPanel">
         <h3>Diversification Check</h3>
-        <DataTable section={result.diversification} />
+        <DataTable section={{ title: "", rows: result.diversification.rows }} />
       </section>
       <section className="chartPanel">
-        <h3>Rolling risk table</h3>
-        <DataTable section={{ title: "", rows: derived.rolling }} />
+        <h3>Benchmark risk decomposition</h3>
+        <DataTable section={{ title: "", rows: benchmarkDecompositionRows(result, derived) }} />
       </section>
       <section className="chartPanel">
         <h3>Formula References</h3>
@@ -924,8 +890,8 @@ function resultChecklist(result: BacktestResult) {
     rows.push({ question: "How often did the strategy trade?", result: `${m.rebalance_count} events`, evidence_tab: "Rebalancing" });
   }
   rows.push(
-    { question: "Did allocation outperform benchmark?", result: `Excess ${formatPercentLike(m.benchmark_excess_return)}`, evidence_tab: "Overview" },
-    { question: "Benchmark risk acceptable?", result: `Beta ${formatNumber(findRiskValue(result, "beta"))}, alpha ${formatPercentLike(findRiskValue(result, "alpha"))}`, evidence_tab: "Overview / Metrics" },
+    { question: "Did allocation outperform benchmark?", result: `Excess ${formatPercentLike(m.benchmark_excess_return)}`, evidence_tab: "Metrics" },
+    { question: "Benchmark risk acceptable?", result: `Beta ${formatNumber(findRiskValue(result, "beta"))}, alpha ${formatPercentLike(findRiskValue(result, "alpha"))}`, evidence_tab: "Metrics" },
     { question: "Worst historical loss visible?", result: `Max drawdown ${pct.format(m.max_drawdown)}`, evidence_tab: "Drawdown" },
     { question: "Diversification visible?", result: `${result.diversification.rows.length} diversification rows`, evidence_tab: "Metrics" },
     { question: "CQF report ready?", result: "Inputs, formulas, results, limitations", evidence_tab: "Report" }
@@ -956,6 +922,8 @@ function keyMetricRows(result: BacktestResult) {
     { metric: "TWRR CAGR", value: pct.format(m.twrr_cagr), formula: "(1 + TWRR)^(1/years) - 1" },
     { metric: "Volatility", value: pct.format(m.volatility), formula: "Std(monthly returns) * sqrt(12)" },
     { metric: "Sharpe ratio", value: formatNumber(m.sharpe), formula: "Annualized excess return / annualized volatility" },
+    { metric: "Sortino ratio", value: formatNumber(m.sortino), formula: "Annualized excess return / downside deviation (penalises losses only)" },
+    { metric: "Calmar ratio", value: formatNumber(m.calmar), formula: "Annualized return / absolute maximum drawdown" },
     { metric: "Maximum drawdown", value: pct.format(m.max_drawdown), formula: "Value / running peak - 1" },
     { metric: "Benchmark excess return", value: formatPercentLike(m.benchmark_excess_return), formula: "Cumulative portfolio TWRR - cumulative benchmark return over matched periods" },
     { metric: "Total contributed", value: money.format(m.total_contributed), formula: "Initial capital + sum of applied positive cashflows" },

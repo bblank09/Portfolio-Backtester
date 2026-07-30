@@ -81,6 +81,8 @@ class MetricSummary(BaseModel):
     twrr_cagr: float
     volatility: float
     sharpe: float | None = None
+    sortino: float | None = None
+    calmar: float | None = None
     max_drawdown: float
     benchmark_excess_return: float | None = None
 

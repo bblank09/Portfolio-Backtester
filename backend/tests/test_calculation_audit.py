@@ -17,6 +17,7 @@ from backend.app.engine.metrics import (
     annualized_return,
     annualized_volatility,
     beta_alpha,
+    calmar_ratio,
     downside_deviation,
     max_drawdown,
     sharpe_ratio,
@@ -135,6 +136,34 @@ def test_sortino_ratio_divides_excess_cagr_by_downside_deviation():
     rf = 0.01
     expected = (annualized_return(returns, MONTHS) - rf) / downside_deviation(returns, MONTHS)
     assert sortino_ratio(returns, rf, MONTHS) == pytest.approx(expected)
+
+
+def test_calmar_ratio_is_cagr_over_the_absolute_max_drawdown():
+    returns = pd.Series([0.10, -0.20, 0.15, 0.05])
+    values = pd.Series([1000.0, 1100.0, 880.0, 1012.0, 1062.6])
+    expected = annualized_return(returns, MONTHS) / abs(max_drawdown(values))
+    assert calmar_ratio(returns, values, MONTHS) == pytest.approx(expected)
+
+
+def test_calmar_ratio_is_none_when_the_portfolio_never_drew_down():
+    returns = pd.Series([0.10, 0.10, 0.10])
+    values = pd.Series([1000.0, 1100.0, 1210.0, 1331.0])
+    assert calmar_ratio(returns, values, MONTHS) is None
+
+
+def test_sortino_ratio_is_none_when_nothing_fell_below_the_mar():
+    returns = pd.Series([0.01, 0.02, 0.03])
+    assert sortino_ratio(returns, 0.0, MONTHS) is None
+
+
+def test_sortino_exceeds_sharpe_when_the_downside_is_milder_than_total_dispersion():
+    # One big up month inflates total dispersion but not downside dispersion,
+    # so penalising only the downside must give the higher ratio.
+    returns = pd.Series([0.20, -0.01, 0.01, -0.01, 0.01, 0.01])
+    sharpe = sharpe_ratio(returns, 0.0, MONTHS)
+    sortino = sortino_ratio(returns, 0.0, MONTHS)
+    assert sortino is not None and sharpe is not None
+    assert sortino > sharpe
 
 
 def test_beta_of_a_series_against_itself_is_one():
@@ -688,6 +717,42 @@ def test_rebalance_costs_sum_to_reported_total_costs_when_drag_is_off():
     assert sum(row["cost"] for row in result["rebalances"]) == pytest.approx(
         result["summary"]["total_costs"]
     )
+
+
+def test_summary_reports_sortino_and_calmar_alongside_sharpe():
+    nav = nav_frame(
+        {"FUND_A": [100.0, 110.0, 88.0, 101.2, 106.26]},
+        ["2020-01-31", "2020-02-29", "2020-03-31", "2020-04-30", "2020-05-31"],
+    )
+    result = run_backtest(make_request(end_date="2020-05-31"), nav)
+    returns = pd.Series([row["return"] for row in result["monthly_returns"]["rows"]])
+    values = pd.Series([point["value"] for point in result["equity_curve"]])
+
+    assert result["summary"]["sortino"] == pytest.approx(
+        sortino_ratio(returns, 0.0, MONTHS)
+    )
+    assert result["summary"]["calmar"] == pytest.approx(
+        calmar_ratio(returns, values, MONTHS)
+    )
+
+
+def test_sortino_uses_the_requested_risk_free_rate():
+    nav = nav_frame(
+        {"FUND_A": [100.0, 110.0, 88.0, 101.2, 106.26]},
+        ["2020-01-31", "2020-02-29", "2020-03-31", "2020-04-30", "2020-05-31"],
+    )
+    without_rf = run_backtest(make_request(end_date="2020-05-31"), nav)
+    with_rf = run_backtest(make_request(end_date="2020-05-31", risk_free_rate_pct=5), nav)
+    assert with_rf["summary"]["sortino"] < without_rf["summary"]["sortino"]
+
+
+def test_flat_portfolio_reports_no_calmar_rather_than_dividing_by_zero():
+    nav = nav_frame(
+        {"FUND_A": [100.0, 110.0, 121.0, 133.1]},
+        ["2020-01-31", "2020-02-29", "2020-03-31", "2020-04-30"],
+    )
+    result = run_backtest(make_request(), nav)
+    assert result["summary"]["calmar"] is None
 
 
 def test_zero_volatility_portfolio_reports_no_sharpe_rather_than_infinity():

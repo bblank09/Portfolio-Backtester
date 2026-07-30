@@ -148,6 +148,9 @@ def formula_reference_section() -> str:
     return (
         rows_table(rows)
         + "\n\nAdditional report ratios: `Sharpe = (R_ann - R_f) / sigma_ann`, "
+        "`Sortino = (R_ann - R_f) / sigma_down` where "
+        "`sigma_down = sqrt(mean(min(r_t - MAR, 0)^2)) * sqrt(m)` with `MAR = 0`, "
+        "`Calmar = R_ann / |MDD|`, "
         "`tracking_error = std(R_p - R_b, ddof=1) * sqrt(m)`, and "
         "`information_ratio = (R_p,ann - R_b,ann) / tracking_error`.\n\n"
         "See `docs/formula-reference.md` for the expanded CQF methodology notes."
@@ -161,6 +164,8 @@ def summary_table(summary: dict[str, Any]) -> str:
         {"metric": "TWRR CAGR", "value": format_percent(summary.get("twrr_cagr"))},
         {"metric": "Volatility", "value": format_percent(summary.get("volatility"))},
         {"metric": "Sharpe", "value": format_number(summary.get("sharpe"))},
+        {"metric": "Sortino", "value": format_number(summary.get("sortino"))},
+        {"metric": "Calmar", "value": format_number(summary.get("calmar"))},
         {"metric": "Maximum drawdown", "value": format_percent(summary.get("max_drawdown"))},
         {"metric": "Benchmark excess return", "value": format_percent(summary.get("benchmark_excess_return"))},
         {"metric": "Total contributed", "value": format_money(summary.get("total_contributed"))},

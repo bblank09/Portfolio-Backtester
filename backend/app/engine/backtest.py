@@ -10,11 +10,13 @@ from backend.app.engine.metrics import (
     annualized_return,
     annualized_volatility,
     beta_alpha,
+    calmar_ratio,
     correlation,
     drawdown_series,
     information_ratio,
     max_drawdown,
     sharpe_ratio,
+    sortino_ratio,
     tracking_error,
 )
 from backend.app.engine.rebalancing import rebalance_due, rebalance_values
@@ -162,6 +164,11 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
         "twrr_cagr": annualized_return(portfolio_returns, PERIODS_PER_YEAR),
         "volatility": annualized_volatility(portfolio_returns, PERIODS_PER_YEAR),
         "sharpe": sharpe,
+        # Sortino penalises only downside dispersion; Calmar scales return by the
+        # worst peak-to-trough loss. Both are reported next to Sharpe because a
+        # single dispersion measure hides skew and tail depth.
+        "sortino": sortino_ratio(portfolio_returns, risk_free_rate, PERIODS_PER_YEAR),
+        "calmar": calmar_ratio(portfolio_returns, portfolio_value, PERIODS_PER_YEAR),
         "max_drawdown": max_drawdown(portfolio_value),
         "benchmark_excess_return": time_weighted_return(aligned_portfolio) - time_weighted_return(aligned_benchmark),
         "cashflow_count": len(cashflow_rows),

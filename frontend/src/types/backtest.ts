@@ -62,6 +62,8 @@ export interface MetricSummary {
   twrr_cagr: number;
   volatility: number;
   sharpe: number | null;
+  sortino: number | null;
+  calmar: number | null;
   max_drawdown: number;
   benchmark_excess_return: number | null;
 }
