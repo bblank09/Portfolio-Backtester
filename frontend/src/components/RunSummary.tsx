@@ -14,6 +14,11 @@ const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD
 const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 const pct = new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 2 });
 
+// Mirrors DEGENERACY_TOLERANCE in backend/app/engine/metrics.py: a computed
+// std never lands on exactly 0, so a truthiness guard lets a ratio divide by
+// ~1e-17 and report a meaningless astronomical value.
+const DEGENERACY_TOLERANCE = 1e-12;
+
 function slugify(label: string) {
   return label.replace(/[^a-zA-Z0-9]+/g, "-");
 }
@@ -640,7 +645,7 @@ function deriveResult(result: BacktestResult) {
     portfolio: asNumber(row.return),
     benchmark: benchmarkReturnsByDate.get(String(row.date)) ?? null
   }));
-  const rolling = rollingRows(monthlyRows);
+  const rolling = rollingRows(monthlyRows, result.request.risk_free_rate_pct / 100);
   return {
     portfolioReturns,
     benchmarkReturns,
@@ -690,7 +695,10 @@ function trailingRows(rows: { date: string; portfolio: number; benchmark: number
     });
 }
 
-function rollingRows(rows: { date: string; portfolio: number; benchmark: number | null }[]) {
+function rollingRows(
+  rows: { date: string; portfolio: number; benchmark: number | null }[],
+  riskFreeRate: number
+) {
   const output = [];
   for (let index = 12; index <= rows.length; index += 1) {
     const slice = rows.slice(index - 12, index);
@@ -699,12 +707,16 @@ function rollingRows(rows: { date: string; portfolio: number; benchmark: number 
     if (!benchmarkValues.every((value): value is number => value != null)) continue;
     const active = portfolioValues.map((value, i) => value - benchmarkValues[i]);
     const volatility = std(portfolioValues) * Math.sqrt(12);
+    // A 12-month window IS one year, so the compounded window return is already
+    // the annualized return -- the same geometric, risk-free-adjusted Sharpe the
+    // backend reports, rather than an unadjusted arithmetic-mean variant.
+    const windowReturn = productReturn(portfolioValues);
     output.push({
       date: rows[index - 1]?.date ?? "",
-      return: productReturn(portfolioValues),
+      return: windowReturn,
       benchmark: productReturn(benchmarkValues),
       volatility,
-      sharpe: std(portfolioValues) ? mean(portfolioValues) / std(portfolioValues) * Math.sqrt(12) : null,
+      sharpe: volatility <= DEGENERACY_TOLERANCE ? null : (windowReturn - riskFreeRate) / volatility,
       tracking_error: std(active) * Math.sqrt(12)
     });
   }
@@ -1075,9 +1087,14 @@ function mean(values: number[]) {
   return values.length ? values.reduce((sum, value) => sum + value, 0) / values.length : 0;
 }
 
+// Sample (n-1) standard deviation, matching annualized_volatility on the
+// backend. Dividing by n instead would make this table disagree with the
+// volatility reported on the Summary tab.
 function std(values: number[]) {
+  if (values.length < 2) return 0;
   const average = mean(values);
-  return Math.sqrt(mean(values.map((value) => (value - average) ** 2)));
+  const sumSquares = values.reduce((total, value) => total + (value - average) ** 2, 0);
+  return Math.sqrt(sumSquares / (values.length - 1));
 }
 
 function productReturn(values: number[]) {
