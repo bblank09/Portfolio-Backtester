@@ -4,7 +4,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from backend.app.reports.markdown import render_cqf_report
+from backend.app.reports.markdown import render_research_report
 
 RUNS_DIR = Path("data/runs")
 SEC_MANIFEST_PATH = Path("data/sec/normalized/sec_data_manifest.json")
@@ -36,7 +36,7 @@ def load_run_artifacts(run_id: str, runs_dir: Path = RUNS_DIR) -> dict[str, Any]
 
 def write_cqf_report(run_id: str, runs_dir: Path = RUNS_DIR) -> Path:
     artifacts = load_run_artifacts(run_id, runs_dir)
-    report = render_cqf_report(
+    report = render_research_report(
         request=artifacts["request"],
         result=artifacts["result"],
         manifest=artifacts["manifest"],

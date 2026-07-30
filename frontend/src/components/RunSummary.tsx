@@ -41,7 +41,7 @@ export function RunSummary({ result }: Props) {
       <section className="resultShell emptyResult">
         <span className="emptyResultIcon"><BarChart3 size={22} /></span>
         <h2>Run a backtest to see results.</h2>
-        <p>Add funds, set weights to 100%, then run to see growth, drawdown, and the CQF report.</p>
+        <p>Add funds, set weights to 100%, then run to see growth, drawdown, and the research report.</p>
       </section>
     );
   }
@@ -100,7 +100,7 @@ function SummaryTab({ result, setActiveTab }: { result: BacktestResult; setActiv
           <ClickableMetric label="Benchmark Risk" value={`Beta ${formatNumber(findRiskValue(result, "beta"))}`} sub={`Alpha ${formatPercentLike(findRiskValue(result, "alpha"))} · TE ${formatPercentLike(findRiskValue(result, "tracking_error"))}`} onClick={() => setActiveTab("Metrics")} />
           <ClickableMetric label="Drawdown Stress" value={pct.format(m.max_drawdown)} sub="Worst historical loss and stress values" onClick={() => setActiveTab("Drawdown")} />
           <ClickableMetric label="Diversification" value={`${result.diversification.rows.length} rows`} sub="Correlation and concentration checks" onClick={() => setActiveTab("Metrics")} />
-          <ClickableMetric label="CQF Report" value="Ready" sub="Method, formulas, caveats" onClick={() => setActiveTab("Report")} />
+          <ClickableMetric label="Research Report" value="Ready" sub="Method, formulas, caveats" onClick={() => setActiveTab("Report")} />
         </div>
       </section>
       <AxisCurve title="Portfolio vs Benchmark Growth" series={[
@@ -293,7 +293,7 @@ function ReportTab({ result }: { result: BacktestResult }) {
       </section>
 
       <section className="reportPanel">
-        <h3>CQF Research Report &mdash; {result.request.start_date} to {result.request.end_date}</h3>
+        <h3>Research Report &mdash; {result.request.start_date} to {result.request.end_date}</h3>
         <p className="footnote">Run {result.run_id} &middot; generated {result.created_at} &middot; SEC Open Data, NAV per unit</p>
 
         <ReportSection title="1. Research question">
@@ -894,7 +894,7 @@ function resultChecklist(result: BacktestResult) {
     { question: "Benchmark risk acceptable?", result: `Beta ${formatNumber(findRiskValue(result, "beta"))}, alpha ${formatPercentLike(findRiskValue(result, "alpha"))}`, evidence_tab: "Metrics" },
     { question: "Worst historical loss visible?", result: `Max drawdown ${pct.format(m.max_drawdown)}`, evidence_tab: "Drawdown" },
     { question: "Diversification visible?", result: `${result.diversification.rows.length} diversification rows`, evidence_tab: "Metrics" },
-    { question: "CQF report ready?", result: "Inputs, formulas, results, limitations", evidence_tab: "Report" }
+    { question: "Research report ready?", result: "Inputs, formulas, results, limitations", evidence_tab: "Report" }
   );
   return rows;
 }
@@ -1160,7 +1160,7 @@ function reportMarkdown(result: BacktestResult, derived: ReturnType<typeof deriv
     body: "Historical NAV backtest only — not a forecast, not investment advice. No tax treatment, individual investor timing, unmodeled fund-specific fee changes, or survivorship-bias correction for delisted funds. Drawdown stress scenarios apply a deterministic shock to ending value and are not a probabilistic simulation."
   });
 
-  const header = `# CQF Research Report — ${result.request.start_date} to ${result.request.end_date}\n\nRun ${result.run_id} — generated ${result.created_at} — SEC Open Data, NAV per unit`;
+  const header = `# Research Report — ${result.request.start_date} to ${result.request.end_date}\n\nRun ${result.run_id} — generated ${result.created_at} — SEC Open Data, NAV per unit`;
   return [header, ...sections.map((section) => `## ${section.title}\n\n${section.body}`)].join("\n\n");
 }
 

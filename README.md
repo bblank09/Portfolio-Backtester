@@ -35,7 +35,7 @@
 
 This project answers one question with a reproducible, formula-transparent backtest: *if an investor had held a given portfolio of Thai mutual funds over a historical period, with a given contribution/withdrawal schedule, rebalancing rule, and cost assumption, what would have happened?*
 
-It is a full-stack application — a FastAPI backtesting engine over cached SEC Thailand Open Data NAV series, and a React/TypeScript dashboard for building portfolios and inspecting results (growth, drawdown, rolling risk, monthly return distribution, and an auditable formula reference) — built as a CQF (Certificate in Quantitative Finance) Module 1–2 project.
+It is a full-stack application — a FastAPI backtesting engine over cached SEC Thailand Open Data NAV series, and a React/TypeScript dashboard for building portfolios and inspecting results (growth, drawdown, rolling risk, monthly return distribution, and an auditable formula reference).
 
 ## 2. Motivation & Research Question
 
@@ -101,7 +101,7 @@ The in-app **Report** tab exposes this same audit trail per run: objective, inpu
 - **Benchmark risk decomposition** — beta, alpha, tracking error, information ratio, correlation.
 - **Light and dark themes** — toggle in the top bar, preference remembered across visits.
 - **Reproducibility verification** — every run persists `request.json` + `result.json`; a saved run can be recomputed and diffed against the stored result (`scripts/sec_verify_run_reproducibility.py`).
-- **Exportable CQF report** — Markdown report, run config, and metrics JSON, generated per run.
+- **Exportable research report** — Markdown report, run config, and metrics JSON, generated per run.
 
 ## 7. Installation & Setup
 
@@ -181,7 +181,7 @@ Running a Past Performance backtest on a two-fund equal-weight portfolio (2020-0
 - **Not investment advice.** All outputs are historical simulations, not predictions or recommendations.
 - **Survivorship bias**: verify whether the cached SEC fund universe includes funds that have since closed or merged before drawing conclusions from any comparison.
 - **No live/real-time data** — the engine reads a locally cached NAV snapshot, refreshed manually via the download workflow.
-- **CQF project scope** — no Monte Carlo simulation, portfolio optimization, efficient frontier, or live broker execution by design.
+- **Scope** — no Monte Carlo simulation, portfolio optimization, efficient frontier, or live broker execution by design.
 - **Single-user, no persistence** — portfolios and results exist only in browser state for the current session; there is no account system or saved-portfolio database yet.
 
 ## 13. Roadmap

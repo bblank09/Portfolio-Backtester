@@ -3,14 +3,14 @@ from __future__ import annotations
 from typing import Any, cast
 
 
-def render_cqf_report(
+def render_research_report(
     *,
     request: dict[str, Any],
     result: dict[str, Any],
     manifest: dict[str, Any],
     quality_issues: list[dict[str, Any]] | None = None,
 ) -> str:
-    """Render a CQF-style markdown report from persisted production artifacts."""
+    """Render a research-report markdown document from persisted production artifacts."""
     quality_issues = quality_issues or result.get("quality_issues", []) or []
     summary = result.get("summary", {})
     risk_metrics = ensure_rows(result.get("risk_metrics", {}).get("rows", []))
@@ -32,7 +32,7 @@ def render_cqf_report(
         ("Reproducibility", reproducibility_section(result)),
         ("Limitations", limitations_section()),
     ]
-    title = "# CQF Portfolio Backtesting Report\n\n"
+    title = "# Portfolio Backtesting Research Report\n\n"
     body = "\n\n".join(f"## {heading}\n\n{content}" for heading, content in sections)
     return title + body + "\n"
 
@@ -153,7 +153,7 @@ def formula_reference_section() -> str:
         "`Calmar = R_ann / |MDD|`, "
         "`tracking_error = std(R_p - R_b, ddof=1) * sqrt(m)`, and "
         "`information_ratio = (R_p,ann - R_b,ann) / tracking_error`.\n\n"
-        "See `docs/formula-reference.md` for the expanded CQF methodology notes."
+        "See `docs/formula-reference.md` for the expanded methodology notes."
     )
 
 
