@@ -38,7 +38,11 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
     if panel.empty:
         raise ValueError("Backtest requires at least two complete NAV observations for selected assets.")
 
-    selected_panel = panel[asset_ids]
+    # The benchmark is validated alongside the holdings: pct_change returns NaN
+    # across a gap, so dropping those periods would splice the benchmark curve
+    # back together and understate its growth, corrupting excess return, beta,
+    # alpha, tracking error and the information ratio.
+    selected_panel = panel[sorted(required_columns)]
     observed_periods = pd.PeriodIndex(panel.index, freq="M")
     expected_periods = pd.period_range(observed_periods.min(), observed_periods.max(), freq="M")
     incomplete_periods = {str(period) for period in expected_periods.difference(observed_periods.unique())}
@@ -48,7 +52,7 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
     )
     if incomplete_periods:
         periods = ", ".join(sorted(incomplete_periods))
-        raise ValueError(f"Backtest cannot calculate with incomplete selected-asset NAV periods: {periods}.")
+        raise ValueError(f"Backtest cannot calculate with incomplete NAV periods for the selected funds or benchmark: {periods}.")
 
     if len(panel) < 2:
         raise ValueError("Backtest requires at least two complete NAV observations for selected assets.")

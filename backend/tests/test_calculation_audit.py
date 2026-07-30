@@ -699,6 +699,42 @@ def test_zero_volatility_portfolio_reports_no_sharpe_rather_than_infinity():
     assert result["summary"]["sharpe"] is None
 
 
+def test_a_gap_in_the_benchmark_is_rejected_rather_than_silently_collapsed():
+    # pct_change yields NaN across a gap, so dropping those periods would splice
+    # the benchmark curve back together and understate its growth: 100 -> 120 is
+    # +20%, but a collapsed curve reports only +9.57%. Every benchmark-relative
+    # number (excess return, alpha, beta, tracking error, information ratio)
+    # would then be computed against a series that never existed.
+    nav = nav_frame(
+        {
+            "FUND_A": [100.0, 110.0, 121.0, 133.1, 146.41],
+            "FUND_B": [100.0, 105.0, float("nan"), 115.0, 120.0],
+        },
+        ["2020-01-31", "2020-02-29", "2020-03-31", "2020-04-30", "2020-05-31"],
+    )
+    request = make_request(end_date="2020-05-31", benchmark="FUND_B")
+    with pytest.raises(ValueError, match="2020-03"):
+        run_backtest(request, nav)
+
+
+def test_a_complete_benchmark_outside_the_selected_assets_still_runs():
+    nav = nav_frame(
+        {
+            "FUND_A": [100.0, 110.0, 121.0],
+            "FUND_B": [100.0, 105.0, 110.25],
+        },
+        ["2020-01-31", "2020-02-29", "2020-03-31"],
+    )
+    request = make_request(end_date="2020-03-31", benchmark="FUND_B")
+    result = run_backtest(request, nav)
+    assert [point["value"] for point in result["benchmark_curve"]] == pytest.approx(
+        [1000.0, 1050.0, 1102.5]
+    )
+    assert result["summary"]["benchmark_excess_return"] == pytest.approx(
+        (1.1**2 - 1) - (1.05**2 - 1)
+    )
+
+
 def test_correlation_against_a_constant_series_is_undefined_not_nan():
     # Correlation divides by each series' standard deviation; against a
     # zero-variance series it is 0/0. That is undefined, so report None rather

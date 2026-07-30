@@ -182,6 +182,10 @@ def test_near_100_percent_weights_preserve_capital_and_cashflow_accounting():
 
 
 def test_missing_benchmark_nav_periods_do_not_become_comparisons():
+    # Dropping the gap would splice 10 -> 11 -> 13 -> 14 into a curve that grew
+    # 18.46% when the benchmark actually grew 40%, so every benchmark-relative
+    # number would be measured against a series that never existed. Refuse the
+    # run instead, exactly as an incomplete holding is refused.
     request = backtest_request(cashflow_enabled=False, end_date="2020-05-31")
     nav = pd.DataFrame(
         {
@@ -194,14 +198,30 @@ def test_missing_benchmark_nav_periods_do_not_become_comparisons():
     payload = request.model_dump(mode="json")
     payload["benchmark_proj_id"] = "BENCHMARK"
 
+    with pytest.raises(ValueError, match="2020-03"):
+        run_backtest(BacktestRequest(**payload), nav)
+
+
+def test_complete_benchmark_outside_the_holdings_is_compared_in_full():
+    request = backtest_request(cashflow_enabled=False, end_date="2020-03-31")
+    nav = pd.DataFrame(
+        {
+            "FUND_A": [10, 10, 10],
+            "FUND_B": [20, 20, 20],
+            "BENCHMARK": [10, 11, 12.1],
+        },
+        index=pd.date_range("2020-01-31", periods=3, freq="ME"),
+    )
+    payload = request.model_dump(mode="json")
+    payload["benchmark_proj_id"] = "BENCHMARK"
+
     result = run_backtest(BacktestRequest(**payload), nav)
 
-    assert [point["date"] for point in result["benchmark_curve"]] == [
-        "2020-01-31",
-        "2020-02-29",
-        "2020-05-31",
-    ]
-    assert result["summary"]["benchmark_excess_return"] == pytest.approx(-0.1846153846)
+    # Flat portfolio against a benchmark that compounded 10% twice.
+    assert [point["value"] for point in result["benchmark_curve"]] == pytest.approx(
+        [1000.0, 1100.0, 1210.0]
+    )
+    assert result["summary"]["benchmark_excess_return"] == pytest.approx(-(1.1**2 - 1))
 
 
 @pytest.mark.parametrize(
@@ -219,7 +239,7 @@ def test_missing_benchmark_nav_periods_do_not_become_comparisons():
     ids=["missing-selected-nav", "absent-calendar-month"],
 )
 def test_incomplete_selected_asset_months_are_rejected(nav):
-    with pytest.raises(ValueError, match="incomplete selected-asset NAV periods: 2020-02"):
+    with pytest.raises(ValueError, match="incomplete NAV periods for the selected funds or benchmark: 2020-02"):
         run_backtest(backtest_request(), nav)
 
 
