@@ -79,3 +79,33 @@ def test_load_aligned_nav_returns_does_not_forward_fill_missing_nav(monkeypatch)
     returns = load_aligned_nav_returns(["FUND_A"], "2024-01-01", "2024-03-31")
 
     assert returns.empty
+
+
+def test_align_nav_panel_keeps_the_index_ordered_when_trailing_months_are_empty():
+    # A record whose NAV is null creates a bucket with no observation. Capping
+    # that bucket's month-end label down to the latest observed date would place
+    # it before the preceding row, leaving a non-monotonic index that breaks
+    # date-range slicing.
+    panel = pd.DataFrame(
+        {"FUND_A": [10.0, 11.0, None, None]},
+        index=pd.to_datetime(["2024-01-31", "2024-02-15", "2024-02-29", "2024-03-31"]),
+    )
+
+    aligned = align_nav_panel(panel)
+
+    assert aligned.index.is_monotonic_increasing
+    assert not aligned.index.has_duplicates
+    # The last label is capped to the latest observation, not left at 2024-03-31.
+    assert aligned.index[-1] == pd.Timestamp("2024-02-15")
+    assert aligned["FUND_A"].tolist() == [10.0, 11.0]
+
+
+def test_align_nav_panel_still_caps_a_partial_final_month():
+    panel = pd.DataFrame(
+        {"FUND_A": [10.0, 11.0]},
+        index=pd.to_datetime(["2024-01-31", "2024-02-15"]),
+    )
+
+    aligned = align_nav_panel(panel)
+
+    assert [str(stamp.date()) for stamp in aligned.index] == ["2024-01-31", "2024-02-15"]

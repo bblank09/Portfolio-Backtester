@@ -128,8 +128,8 @@ def formula_reference_section() -> str:
         },
         {
             "formula": "annualized_volatility",
-            "equation": "sigma_ann = std(r_t, ddof=0) * sqrt(m)",
-            "variables": "std(..., ddof=0) = population standard deviation for deterministic reporting",
+            "equation": "sigma_ann = std(r_t, ddof=1) * sqrt(m)",
+            "variables": "std(..., ddof=1) = unbiased sample standard deviation, the same convention as the cov/var behind beta",
             "used_for": "Volatility and Sharpe denominator",
         },
         {
@@ -148,7 +148,7 @@ def formula_reference_section() -> str:
     return (
         rows_table(rows)
         + "\n\nAdditional report ratios: `Sharpe = (R_ann - R_f) / sigma_ann`, "
-        "`tracking_error = std(R_p - R_b, ddof=0) * sqrt(m)`, and "
+        "`tracking_error = std(R_p - R_b, ddof=1) * sqrt(m)`, and "
         "`information_ratio = (R_p,ann - R_b,ann) / tracking_error`.\n\n"
         "See `docs/formula-reference.md` for the expanded CQF methodology notes."
     )

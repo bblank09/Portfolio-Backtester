@@ -20,7 +20,19 @@ def cap_incomplete_period_label(aligned: pd.DataFrame, source_panel: pd.DataFram
     if aligned.empty or source_panel.empty:
         return aligned
     latest_source_date = source_panel.dropna(how="all").index.max()
-    if pd.isna(latest_source_date) or aligned.index[-1] <= latest_source_date:
+    if pd.isna(latest_source_date):
+        return aligned
+
+    # Buckets beyond the one holding the latest observation contain nothing at
+    # all (a record can exist with a null NAV). Drop them before capping:
+    # relabelling such a bucket to the latest observed date would move it behind
+    # the preceding row and leave the index non-monotonic, which silently breaks
+    # date-range slicing.
+    boundary = aligned.index[aligned.index >= latest_source_date]
+    if len(boundary):
+        aligned = aligned.loc[:boundary[0]]
+
+    if aligned.empty or aligned.index[-1] <= latest_source_date:
         return aligned
     capped = aligned.copy()
     index_values = list(capped.index)

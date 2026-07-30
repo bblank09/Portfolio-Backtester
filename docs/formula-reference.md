@@ -99,12 +99,12 @@ Used in output:
 Purpose: annualize return dispersion from period returns.
 
 ```text
-sigma_ann = std(r_t, ddof=0) * sqrt(m)
+sigma_ann = std(r_t, ddof=1) * sqrt(m)
 ```
 
 Where:
 
-- `std(r_t, ddof=0)` is the population standard deviation used by the engine for deterministic reporting.
+- `std(r_t, ddof=1)` is the unbiased sample standard deviation (Bessel corrected), matching the `ddof=1` cov/var used by beta so Sharpe and beta rest on one convention.
 - `m = 12` for month-end returns.
 
 Used in output:
@@ -208,7 +208,7 @@ active_t = R_p,t - R_b,t
 Tracking error:
 
 ```text
-tracking_error = std(active_t, ddof=0) * sqrt(m)
+tracking_error = std(active_t, ddof=1) * sqrt(m)
 ```
 
 Information ratio:

@@ -43,7 +43,7 @@ def test_report_formula_reference_contains_real_equations():
         "annualized_return",
         "^(m / n) - 1",
         "annualized_volatility",
-        "std(r_t, ddof=0) * sqrt(m)",
+        "std(r_t, ddof=1) * sqrt(m)",
         "max_drawdown",
         "DD_t = V_t / max(V_0,...,V_t) - 1",
         "beta_alpha",
