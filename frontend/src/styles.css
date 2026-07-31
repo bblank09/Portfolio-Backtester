@@ -221,6 +221,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .page.active { display: flex; }
 @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 
+.app-footer {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 16px 20px; border-top: 1px solid var(--border);
+  color: var(--text-tertiary); font-size: 12px;
+}
+.app-footer-mark { width: 18px; height: 18px; object-fit: contain; opacity: .85; }
+.app-footer a { color: var(--text-secondary); font-weight: 600; text-decoration: none; }
+.app-footer a:hover { color: var(--accent); text-decoration: underline; }
+
 .page-head h1 { font-size: 26px; font-weight: 700; letter-spacing: -0.015em; margin: 0 0 6px; text-wrap: balance; }
 .page-head p { margin: 0; color: var(--text-secondary); font-size: 14.5px; max-width: 70ch; }
 

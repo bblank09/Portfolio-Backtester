@@ -1,5 +1,10 @@
 <div align="center">
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/author-logo-dark.png">
+  <img src="docs/assets/author-logo-light.png" alt="Author logo" width="140">
+</picture>
+
 # Portfolio Backtester
 
 **Historical portfolio backtesting on SEC Thailand Open Data mutual fund NAV series**
@@ -8,6 +13,8 @@
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](pyproject.toml)
 [![FastAPI](https://img.shields.io/badge/backend-FastAPI-009688.svg)](backend/app/main.py)
 [![React + TypeScript](https://img.shields.io/badge/frontend-React%20%2B%20TS-61DAFB.svg)](frontend/package.json)
+
+Built by [**Supachok Julaupay**](https://github.com/bblank09) &middot; [github.com/bblank09](https://github.com/bblank09)
 
 </div>
 
@@ -194,6 +201,7 @@ Released under the [MIT License](LICENSE).
 
 ## 15. Acknowledgments & Data Attribution
 
+- **Author:** [Supachok Julaupay](https://github.com/bblank09) &mdash; [github.com/bblank09](https://github.com/bblank09).
 - Fund NAV and profile data: [SEC Thailand Open Data](https://api.sec.or.th/) (Securities and Exchange Commission, Thailand).
 - Reference tools consulted during design: [Portfolio Visualizer](https://www.portfoliovisualizer.com/analysis), [testfol.io](https://testfol.io/help), [Portfolio Performance](https://www.portfolio-performance.info/en/).
 - Icons: [Lucide](https://lucide.dev/).
