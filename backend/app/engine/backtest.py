@@ -13,6 +13,7 @@ from backend.app.engine.metrics import (
     calmar_ratio,
     correlation,
     drawdown_series,
+    historical_var,
     information_ratio,
     max_drawdown,
     sharpe_ratio,
@@ -105,7 +106,14 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
                 total_withdrawn += abs(applied_cashflow)
             cashflow_rows.append({"date": current_date, "amount": applied_cashflow})
 
-        if rebalance_due(current_date, previous_date, request.rebalancing.mode):
+        if rebalance_due(
+            current_date,
+            previous_date,
+            request.rebalancing.mode,
+            values=values,
+            target_weights=target_weights,
+            threshold_pct=request.rebalancing.threshold_pct,
+        ):
             before = values.copy()
             values, turnover, money_turnover = rebalance_values(values, target_weights)
             cost = money_turnover * cost_rate
@@ -169,6 +177,8 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
         # single dispersion measure hides skew and tail depth.
         "sortino": sortino_ratio(portfolio_returns, risk_free_rate, PERIODS_PER_YEAR),
         "calmar": calmar_ratio(portfolio_returns, portfolio_value, PERIODS_PER_YEAR),
+        "var_95": historical_var(portfolio_returns, confidence=0.95),
+        "var_99": historical_var(portfolio_returns, confidence=0.99),
         "max_drawdown": max_drawdown(portfolio_value),
         "benchmark_excess_return": time_weighted_return(aligned_portfolio) - time_weighted_return(aligned_benchmark),
         "cashflow_count": len(cashflow_rows),

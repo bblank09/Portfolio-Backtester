@@ -19,12 +19,13 @@ from backend.app.engine.metrics import (
     beta_alpha,
     calmar_ratio,
     downside_deviation,
+    historical_var,
     max_drawdown,
     sharpe_ratio,
     sortino_ratio,
     tracking_error,
 )
-from backend.app.engine.rebalancing import rebalance_values
+from backend.app.engine.rebalancing import rebalance_due, rebalance_values
 from backend.app.engine.returns import time_weighted_return
 
 MONTHS = 12
@@ -51,7 +52,7 @@ def make_request(
         risk_free_rate_pct=risk_free_rate_pct,
         cashflow=cashflow
         or {"enabled": False, "type": "contribution", "amount": 0, "frequency": "monthly", "timing": "end"},
-        rebalancing={"mode": rebalancing},
+        rebalancing=rebalancing if isinstance(rebalancing, dict) else {"mode": rebalancing},
         costs=costs or {"transaction_bps": 0, "slippage_bps": 0, "annual_drag_pct": 0},
         data={"source": "sec_open_data", "price_field": "nav_per_unit"},
     )
@@ -138,6 +139,30 @@ def test_sortino_ratio_divides_excess_cagr_by_downside_deviation():
     assert sortino_ratio(returns, rf, MONTHS) == pytest.approx(expected)
 
 
+def test_historical_var_is_the_loss_at_the_given_confidence_percentile():
+    # 10 observations; 95% VaR is the loss such that only 5% of observed
+    # months were worse -- the (1 - confidence) percentile of the return
+    # distribution, reported as a positive loss magnitude.
+    returns = pd.Series([-0.10, -0.05, 0.00, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08])
+    # numpy's linear-interpolation 5th percentile of this series is -0.0775.
+    assert historical_var(returns, confidence=0.95) == pytest.approx(0.0775)
+
+
+def test_historical_var_at_99_confidence_is_more_severe_than_at_95():
+    returns = pd.Series([-0.10, -0.05, 0.00, 0.02, 0.03, 0.04, 0.05, 0.06, 0.07, 0.08])
+    assert historical_var(returns, confidence=0.99) > historical_var(returns, confidence=0.95)
+
+
+def test_historical_var_of_an_all_positive_series_is_zero_not_negative():
+    # A "loss" that is actually a gain is not a risk figure; VaR floors at 0.
+    returns = pd.Series([0.01, 0.02, 0.03, 0.04, 0.05])
+    assert historical_var(returns, confidence=0.95) == pytest.approx(0.0)
+
+
+def test_historical_var_is_none_with_too_few_observations():
+    assert historical_var(pd.Series([0.01, 0.02]), confidence=0.95) is None
+
+
 def test_calmar_ratio_is_cagr_over_the_absolute_max_drawdown():
     returns = pd.Series([0.10, -0.20, 0.15, 0.05])
     values = pd.Series([1000.0, 1100.0, 880.0, 1012.0, 1062.6])
@@ -196,6 +221,57 @@ def test_rebalance_turnover_is_one_sided_traded_fraction():
     assert target.to_dict() == pytest.approx({"A": 550.0, "B": 550.0})
     assert money == pytest.approx(50.0)  # (|550-600| + |550-500|) / 2
     assert ratio == pytest.approx(50.0 / 1100.0)
+
+
+def test_threshold_rebalance_fires_when_any_asset_drifts_past_the_band():
+    # Target 50/50 on 1000 total; A at 580 is 58% -- 8 points of drift, past a 5pt band.
+    values = pd.Series({"A": 580.0, "B": 420.0})
+    weights = pd.Series({"A": 0.5, "B": 0.5})
+    due = rebalance_due(
+        pd.Timestamp("2020-02-29"), pd.Timestamp("2020-01-31"), "threshold",
+        values=values, target_weights=weights, threshold_pct=5.0,
+    )
+    assert due is True
+
+
+def test_threshold_rebalance_does_not_fire_within_the_band():
+    values = pd.Series({"A": 520.0, "B": 480.0})  # 52/48, 2pt drift
+    weights = pd.Series({"A": 0.5, "B": 0.5})
+    due = rebalance_due(
+        pd.Timestamp("2020-02-29"), pd.Timestamp("2020-01-31"), "threshold",
+        values=values, target_weights=weights, threshold_pct=5.0,
+    )
+    assert due is False
+
+
+def test_threshold_rebalance_at_exactly_the_band_edge_does_not_fire():
+    values = pd.Series({"A": 550.0, "B": 450.0})  # exactly 5pt drift
+    weights = pd.Series({"A": 0.5, "B": 0.5})
+    due = rebalance_due(
+        pd.Timestamp("2020-02-29"), pd.Timestamp("2020-01-31"), "threshold",
+        values=values, target_weights=weights, threshold_pct=5.0,
+    )
+    assert due is False
+
+
+def test_engine_rebalances_only_when_drift_crosses_the_configured_band():
+    nav = nav_frame(
+        {"FUND_A": [100.0, 100.0, 160.0], "FUND_B": [100.0, 100.0, 100.0]},
+        ["2020-01-31", "2020-02-29", "2020-03-31"],
+    )
+    request = make_request(
+        assets=[
+            {"proj_id": "FUND_A", "display_name": "A", "weight": 50},
+            {"proj_id": "FUND_B", "display_name": "B", "weight": 50},
+        ],
+        end_date="2020-03-31",
+        rebalancing={"mode": "threshold", "threshold_pct": 5.0},
+    )
+    result = run_backtest(request, nav)
+    # Feb: FUND_A unchanged -> no drift, no rebalance.
+    # Mar: FUND_A +60% -> 800/500 of 1300 = 61.5% vs 50% target, 11.5pt drift, past the band.
+    assert result["summary"]["rebalance_count"] == 1
+    assert result["rebalances"][0]["date"] == "2020-03-31"
 
 
 def test_rebalance_of_an_on_target_portfolio_has_zero_turnover():
@@ -717,6 +793,21 @@ def test_rebalance_costs_sum_to_reported_total_costs_when_drag_is_off():
     assert sum(row["cost"] for row in result["rebalances"]) == pytest.approx(
         result["summary"]["total_costs"]
     )
+
+
+def test_summary_reports_var_95_and_var_99():
+    nav = nav_frame(
+        {"FUND_A": [100.0, 95.0, 110.0, 90.0, 120.0, 105.0, 130.0, 100.0]},
+        [
+            "2020-01-31", "2020-02-29", "2020-03-31", "2020-04-30",
+            "2020-05-31", "2020-06-30", "2020-07-31", "2020-08-31",
+        ],
+    )
+    result = run_backtest(make_request(end_date="2020-08-31"), nav)
+    returns = pd.Series([row["return"] for row in result["monthly_returns"]["rows"]])
+    assert result["summary"]["var_95"] == pytest.approx(historical_var(returns, confidence=0.95))
+    assert result["summary"]["var_99"] == pytest.approx(historical_var(returns, confidence=0.99))
+    assert result["summary"]["var_99"] >= result["summary"]["var_95"]
 
 
 def test_summary_reports_sortino_and_calmar_alongside_sharpe():

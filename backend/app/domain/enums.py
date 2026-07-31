@@ -22,6 +22,7 @@ class RebalanceMode(StrEnum):
     monthly = "monthly"
     quarterly = "quarterly"
     annual = "annual"
+    threshold = "threshold"
 
 
 class DataSource(StrEnum):

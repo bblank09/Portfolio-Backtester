@@ -1,7 +1,7 @@
 export type Frequency = "monthly" | "quarterly" | "annual";
 export type CashflowType = "contribution" | "withdrawal";
 export type CashflowTiming = "beginning" | "end";
-export type RebalanceMode = "none" | "monthly" | "quarterly" | "annual";
+export type RebalanceMode = "none" | "monthly" | "quarterly" | "annual" | "threshold";
 
 export interface SecFundAllocation {
   proj_id: string;
@@ -31,6 +31,7 @@ export interface CashflowRule {
 
 export interface RebalanceRule {
   mode: RebalanceMode;
+  threshold_pct: number;
 }
 
 export interface CostAssumptions {
@@ -64,6 +65,8 @@ export interface MetricSummary {
   sharpe: number | null;
   sortino: number | null;
   calmar: number | null;
+  var_95: number | null;
+  var_99: number | null;
   max_drawdown: number;
   benchmark_excess_return: number | null;
 }

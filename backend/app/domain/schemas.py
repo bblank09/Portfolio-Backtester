@@ -29,6 +29,7 @@ class CashflowRule(BaseModel):
 
 class RebalanceRule(BaseModel):
     mode: RebalanceMode = RebalanceMode.annual
+    threshold_pct: float = Field(default=5.0, gt=0)
 
 
 class CostAssumptions(BaseModel):
@@ -83,6 +84,8 @@ class MetricSummary(BaseModel):
     sharpe: float | None = None
     sortino: float | None = None
     calmar: float | None = None
+    var_95: float | None = None
+    var_99: float | None = None
     max_drawdown: float
     benchmark_excess_return: float | None = None
 

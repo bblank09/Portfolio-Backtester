@@ -60,6 +60,21 @@ def drawdown_series(values: pd.Series) -> pd.Series:
     return clean / clean.cummax() - 1
 
 
+def historical_var(returns: pd.Series, confidence: float, min_observations: int = 3) -> float | None:
+    """Historical (non-parametric) Value at Risk, as a positive loss magnitude.
+
+    The (1 - confidence) percentile of observed period returns is the largest
+    loss expected `confidence` of the time (e.g. 95% VaR = 3% means no more
+    than a 3% loss is expected in 95% of periods). Requires at least
+    `min_observations` clean returns for the percentile to be meaningful.
+    """
+    clean = returns.dropna()
+    if len(clean) < min_observations:
+        return None
+    percentile = float(np.percentile(clean.to_numpy(dtype=float), (1 - confidence) * 100))
+    return max(0.0, -percentile)
+
+
 def calmar_ratio(returns: pd.Series, values: pd.Series, periods_per_year: int) -> float | None:
     drawdown = abs(max_drawdown(values))
     if drawdown <= DEGENERACY_TOLERANCE:

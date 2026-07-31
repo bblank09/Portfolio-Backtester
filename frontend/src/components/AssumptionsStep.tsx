@@ -124,13 +124,33 @@ export function AssumptionsStep({ active, request, funds, validationErrors, erro
         <div className="form-grid">
           <div className="form-field">
             <label htmlFor="rebalancing">Mode</label>
-            <select className="field" id="rebalancing" value={request.rebalancing.mode} onChange={(event) => onChange({ ...request, rebalancing: { mode: event.target.value as BacktestRequest["rebalancing"]["mode"] } })}>
+            <select
+              className="field"
+              id="rebalancing"
+              value={request.rebalancing.mode}
+              onChange={(event) => onChange({ ...request, rebalancing: { ...request.rebalancing, mode: event.target.value as BacktestRequest["rebalancing"]["mode"] } })}
+            >
               <option value="none">None</option>
               <option value="monthly">Monthly</option>
               <option value="quarterly">Quarterly</option>
               <option value="annual">Annual</option>
+              <option value="threshold">Threshold (band)</option>
             </select>
           </div>
+          {request.rebalancing.mode === "threshold" ? (
+            <div className="form-field">
+              <label htmlFor="rebalanceThreshold">Drift band (%)</label>
+              <input
+                className="field num"
+                id="rebalanceThreshold"
+                min={0.1}
+                step={0.1}
+                type="number"
+                value={request.rebalancing.threshold_pct}
+                onChange={(event) => onChange({ ...request, rebalancing: { ...request.rebalancing, threshold_pct: Number(event.target.value) } })}
+              />
+            </div>
+          ) : null}
         </div>
 
         <div className={advancedOpen ? "advanced-toggle open" : "advanced-toggle"} onClick={() => setAdvancedOpen((open) => !open)}>
@@ -181,7 +201,11 @@ export function AssumptionsStep({ active, request, funds, validationErrors, erro
       <div className="review-box">
         Run a backtest for <b>{request.assets.map((asset) => `${asset.display_name} ${asset.weight}%`).join(", ")}</b> from <b>{request.start_date}</b> to <b>{request.end_date}</b>, starting capital <b>{request.initial_capital.toLocaleString()}</b>
         {showCashflow ? <> with <b>{request.cashflow.type}</b> of <b>{request.cashflow.amount.toLocaleString()}</b> {request.cashflow.frequency}</> : null}
-        {request.rebalancing.mode !== "none" ? <>, rebalanced <b>{request.rebalancing.mode}</b></> : null}.
+        {request.rebalancing.mode === "threshold" ? (
+          <>, rebalanced whenever any holding drifts <b>{request.rebalancing.threshold_pct}%</b> from target</>
+        ) : request.rebalancing.mode !== "none" ? (
+          <>, rebalanced <b>{request.rebalancing.mode}</b></>
+        ) : null}.
       </div>
 
       {validationErrors.length ? (

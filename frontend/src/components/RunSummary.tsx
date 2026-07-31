@@ -924,6 +924,8 @@ function keyMetricRows(result: BacktestResult) {
     { metric: "Sharpe ratio", value: formatNumber(m.sharpe), formula: "Annualized excess return / annualized volatility" },
     { metric: "Sortino ratio", value: formatNumber(m.sortino), formula: "Annualized excess return / downside deviation (penalises losses only)" },
     { metric: "Calmar ratio", value: formatNumber(m.calmar), formula: "Annualized return / absolute maximum drawdown" },
+    { metric: "Value at Risk (95%)", value: formatPercentLike(m.var_95), formula: "Historical 5th percentile monthly loss (non-parametric)" },
+    { metric: "Value at Risk (99%)", value: formatPercentLike(m.var_99), formula: "Historical 1st percentile monthly loss (non-parametric)" },
     { metric: "Maximum drawdown", value: pct.format(m.max_drawdown), formula: "Value / running peak - 1" },
     { metric: "Benchmark excess return", value: formatPercentLike(m.benchmark_excess_return), formula: "Cumulative portfolio TWRR - cumulative benchmark return over matched periods" },
     { metric: "Total contributed", value: money.format(m.total_contributed), formula: "Initial capital + sum of applied positive cashflows" },

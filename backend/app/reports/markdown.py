@@ -100,9 +100,16 @@ def cashflow_section(request: dict[str, Any]) -> str:
 
 
 def rebalancing_section(request: dict[str, Any]) -> str:
-    mode = request.get("rebalancing", {}).get("mode", "unknown")
+    rebalancing = request.get("rebalancing", {})
+    mode = rebalancing.get("mode", "unknown")
     if mode == "none":
         return "Rebalancing is disabled; portfolio weights drift with SEC NAV returns."
+    if mode == "threshold":
+        threshold_pct = rebalancing.get("threshold_pct", "unknown")
+        return (
+            f"Portfolio holdings are rebalanced to target weights whenever any holding's weight drifts "
+            f"more than `{threshold_pct}` percentage points from its target, checked each period."
+        )
     return f"Portfolio holdings are rebalanced to target weights using `{mode}` schedule when the rebalance rule is due."
 
 
@@ -151,6 +158,7 @@ def formula_reference_section() -> str:
         "`Sortino = (R_ann - R_f) / sigma_down` where "
         "`sigma_down = sqrt(mean(min(r_t - MAR, 0)^2)) * sqrt(m)` with `MAR = 0`, "
         "`Calmar = R_ann / |MDD|`, "
+        "`VaR_c = max(0, -percentile(r_t, (1 - c) * 100))` (historical, non-parametric), "
         "`tracking_error = std(R_p - R_b, ddof=1) * sqrt(m)`, and "
         "`information_ratio = (R_p,ann - R_b,ann) / tracking_error`.\n\n"
         "See `docs/formula-reference.md` for the expanded methodology notes."
@@ -166,6 +174,8 @@ def summary_table(summary: dict[str, Any]) -> str:
         {"metric": "Sharpe", "value": format_number(summary.get("sharpe"))},
         {"metric": "Sortino", "value": format_number(summary.get("sortino"))},
         {"metric": "Calmar", "value": format_number(summary.get("calmar"))},
+        {"metric": "Value at Risk (95%)", "value": format_percent(summary.get("var_95"))},
+        {"metric": "Value at Risk (99%)", "value": format_percent(summary.get("var_99"))},
         {"metric": "Maximum drawdown", "value": format_percent(summary.get("max_drawdown"))},
         {"metric": "Benchmark excess return", "value": format_percent(summary.get("benchmark_excess_return"))},
         {"metric": "Total contributed", "value": format_money(summary.get("total_contributed"))},
