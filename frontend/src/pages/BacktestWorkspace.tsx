@@ -135,8 +135,11 @@ export function BacktestWorkspace() {
       </div>
 
       <footer className="app-footer">
-        <img alt="" className="app-footer-mark" src={theme === "dark" ? "/brand/author-logo-dark.png" : "/brand/author-logo-light.png"} />
-        <span>Built by Supachok Julaupay &middot; <a href="https://github.com/bblank09" rel="noreferrer" target="_blank">github.com/bblank09</a></span>
+        <img alt="Supachok Julaupay signature mark" className="app-footer-mark" src={theme === "dark" ? "/brand/author-logo-dark.png" : "/brand/author-logo-light.png"} />
+        <div className="app-footer-text">
+          <span className="app-footer-name">Supachok Julaupay</span>
+          <a href="https://github.com/bblank09" rel="noreferrer" target="_blank">github.com/bblank09</a>
+        </div>
       </footer>
 
       <RunOverlay open={loading} />

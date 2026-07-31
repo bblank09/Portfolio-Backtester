@@ -2,7 +2,7 @@
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/assets/author-logo-dark.png">
-  <img src="docs/assets/author-logo-light.png" alt="Author logo" width="140">
+  <img src="docs/assets/author-logo-light.png" alt="Author logo" width="200">
 </picture>
 
 # Portfolio Backtester
