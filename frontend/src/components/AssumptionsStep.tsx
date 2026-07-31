@@ -189,6 +189,18 @@ export function AssumptionsStep({ active, request, funds, validationErrors, erro
               </select>
             </div>
             <div className="form-field">
+              <label htmlFor="dataFrequency">NAV granularity</label>
+              <select
+                className="field"
+                id="dataFrequency"
+                value={request.data.frequency}
+                onChange={(event) => onChange({ ...request, data: { ...request.data, frequency: event.target.value as BacktestRequest["data"]["frequency"] } })}
+              >
+                <option value="monthly">Monthly (month-end)</option>
+                <option value="daily">Daily (business days)</option>
+              </select>
+            </div>
+            <div className="form-field">
               <label htmlFor="dividendTreatment">Dividend treatment</label>
               <select className="field" disabled id="dividendTreatment" value="fund_nav">
                 <option value="fund_nav">Reflected through fund NAV only</option>

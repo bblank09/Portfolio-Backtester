@@ -31,3 +31,8 @@ class DataSource(StrEnum):
 
 class PriceField(StrEnum):
     nav_per_unit = "nav_per_unit"
+
+
+class AlignmentFrequency(StrEnum):
+    monthly = "monthly"
+    daily = "daily"

@@ -17,7 +17,7 @@ const initialRequest: BacktestRequest = {
   cashflow: { enabled: false, type: "contribution", amount: 0, frequency: "monthly", timing: "end" },
   rebalancing: { mode: "annual", threshold_pct: 5 },
   costs: { transaction_bps: 0, slippage_bps: 0, annual_drag_pct: 0 },
-  data: { source: "sec_open_data", price_field: "nav_per_unit" }
+  data: { source: "sec_open_data", price_field: "nav_per_unit", frequency: "monthly" }
 };
 
 export function BacktestWorkspace() {

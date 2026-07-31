@@ -36,7 +36,7 @@ def test_backtest_endpoint_uses_sec_cache_and_persists_run():
     assert (run_dir / "result.json").exists()
 
 
-def test_backtest_report_endpoint_exports_cqf_markdown():
+def test_backtest_report_endpoint_exports_research_report_markdown():
     result = create_sample_backtest()
     client = TestClient(app)
     response = client.get(f"/api/backtests/{result['run_id']}/report")
@@ -46,7 +46,7 @@ def test_backtest_report_endpoint_exports_cqf_markdown():
     assert "Formula Reference" in report
     assert "Limitations" in report
     assert "mock" not in report.lower()
-    assert (Path("data/runs") / result["run_id"] / "cqf_report.md").exists()
+    assert (Path("data/runs") / result["run_id"] / "research_report.md").exists()
 
 
 @lru_cache(maxsize=1)

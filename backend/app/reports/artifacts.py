@@ -34,7 +34,7 @@ def load_run_artifacts(run_id: str, runs_dir: Path = RUNS_DIR) -> dict[str, Any]
     }
 
 
-def write_cqf_report(run_id: str, runs_dir: Path = RUNS_DIR) -> Path:
+def write_research_report(run_id: str, runs_dir: Path = RUNS_DIR) -> Path:
     artifacts = load_run_artifacts(run_id, runs_dir)
     report = render_research_report(
         request=artifacts["request"],
@@ -42,6 +42,6 @@ def write_cqf_report(run_id: str, runs_dir: Path = RUNS_DIR) -> Path:
         manifest=artifacts["manifest"],
         quality_issues=artifacts["result"].get("quality_issues", []),
     )
-    output = artifacts["run_dir"] / "cqf_report.md"
+    output = artifacts["run_dir"] / "research_report.md"
     output.write_text(report, encoding="utf-8")
     return output

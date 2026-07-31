@@ -4,6 +4,7 @@ from typing import Any
 from pydantic import BaseModel, Field, model_validator
 
 from .enums import (
+    AlignmentFrequency,
     CashflowTiming,
     CashflowType,
     DataSource,
@@ -41,6 +42,7 @@ class CostAssumptions(BaseModel):
 class DataAssumptions(BaseModel):
     source: DataSource = DataSource.sec_open_data
     price_field: PriceField = PriceField.nav_per_unit
+    frequency: AlignmentFrequency = AlignmentFrequency.monthly
 
 
 class BacktestRequest(BaseModel):

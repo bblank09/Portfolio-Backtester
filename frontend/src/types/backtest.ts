@@ -43,6 +43,7 @@ export interface CostAssumptions {
 export interface DataAssumptions {
   source: "sec_open_data";
   price_field: "nav_per_unit";
+  frequency: "monthly" | "daily";
 }
 
 export interface BacktestRequest {

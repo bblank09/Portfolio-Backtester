@@ -75,6 +75,7 @@ def input_assumptions_section(request: dict[str, Any]) -> str:
         {"input": "Annual drag", "value": format_percent(costs.get("annual_drag_pct"), scale=1)},
         {"input": "Data source", "value": request.get("data", {}).get("source", "sec_open_data")},
         {"input": "Price field", "value": request.get("data", {}).get("price_field", "nav_per_unit")},
+        {"input": "NAV granularity", "value": request.get("data", {}).get("frequency", "monthly")},
     ]
     return rows_table(rows)
 
@@ -130,7 +131,7 @@ def formula_reference_section() -> str:
         {
             "formula": "annualized_return",
             "equation": "R_ann = product_{t=1..n}(1 + r_t)^(m / n) - 1",
-            "variables": "m = periods per year, currently 12 for month-end data",
+            "variables": "m = periods per year: 12 for month-end data, 252 for daily (business-day) data",
             "used_for": "TWRR CAGR, benchmark CAGR, CAPM alpha input",
         },
         {

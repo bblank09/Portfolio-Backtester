@@ -12,11 +12,16 @@ from fastapi.responses import PlainTextResponse
 from backend.app.data.quality import align_nav_panel, validate_nav_panel
 from backend.app.domain.schemas import BacktestRequest
 from backend.app.engine.backtest import run_backtest
-from backend.app.reports.artifacts import write_cqf_report
+from backend.app.reports.artifacts import write_research_report
 from backend.app.sec.cache import load_nav_panel
 
 router = APIRouter(prefix="/api/backtests", tags=["backtests"])
 RUNS_DIR = Path("data/runs")
+
+
+def min_complete_observations_for(frequency: str) -> int:
+    """The `short_history` warning bar, in periods -- ~1 year regardless of grain."""
+    return 252 if frequency == "daily" else 12
 
 
 @router.post("")
@@ -26,12 +31,16 @@ def create_backtest(request: BacktestRequest) -> dict[str, Any]:
 
     proj_ids = sorted({asset.proj_id for asset in request.assets} | {request.benchmark_proj_id})
     try:
-        nav = align_nav_panel(load_nav_panel(proj_ids))
+        nav = align_nav_panel(load_nav_panel(proj_ids), frequency=request.data.frequency)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail="SEC NAV cache is missing. Run scripts/sec_download_mvp.py.") from exc
 
     selected_nav = nav.loc[pd.Timestamp(request.start_date) : pd.Timestamp(request.end_date), proj_ids]
-    quality_issues = validate_nav_panel(selected_nav, as_of=pd.Timestamp(request.end_date))
+    quality_issues = validate_nav_panel(
+        selected_nav,
+        as_of=pd.Timestamp(request.end_date),
+        min_complete_observations=min_complete_observations_for(request.data.frequency),
+    )
     try:
         result = run_backtest(request, nav)
     except ValueError as exc:
@@ -48,7 +57,7 @@ def create_backtest(request: BacktestRequest) -> dict[str, Any]:
 @router.get("/{run_id}/report", response_class=PlainTextResponse)
 def get_backtest_report(run_id: str) -> str:
     try:
-        report_path = write_cqf_report(run_id)
+        report_path = write_research_report(run_id)
     except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=f"Backtest run not found: {run_id}") from exc
     return report_path.read_text(encoding="utf-8")

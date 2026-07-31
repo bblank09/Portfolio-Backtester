@@ -109,3 +109,12 @@ def test_align_nav_panel_still_caps_a_partial_final_month():
     aligned = align_nav_panel(panel)
 
     assert [str(stamp.date()) for stamp in aligned.index] == ["2024-01-31", "2024-02-15"]
+
+
+def test_min_complete_observations_scales_with_daily_frequency():
+    from backend.app.api.backtests import min_complete_observations_for
+
+    # 12 monthly observations is a ~1 year bar; the same "about a year" bar for
+    # daily data is ~252 business days, not 12 calendar days.
+    assert min_complete_observations_for("monthly") == 12
+    assert min_complete_observations_for("daily") == 252

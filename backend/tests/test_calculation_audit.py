@@ -42,6 +42,7 @@ def make_request(
     cashflow=None,
     costs=None,
     risk_free_rate_pct=0.0,
+    frequency="monthly",
 ):
     return BacktestRequest(
         assets=assets or [{"proj_id": "FUND_A", "display_name": "Fund A", "weight": 100}],
@@ -54,7 +55,7 @@ def make_request(
         or {"enabled": False, "type": "contribution", "amount": 0, "frequency": "monthly", "timing": "end"},
         rebalancing=rebalancing if isinstance(rebalancing, dict) else {"mode": rebalancing},
         costs=costs or {"transaction_bps": 0, "slippage_bps": 0, "annual_drag_pct": 0},
-        data={"source": "sec_open_data", "price_field": "nav_per_unit"},
+        data={"source": "sec_open_data", "price_field": "nav_per_unit", "frequency": frequency},
     )
 
 
@@ -931,6 +932,46 @@ def test_engine_never_emits_non_finite_numbers():
 
     walk(result)
     assert offenders == []
+
+
+def test_daily_frequency_does_not_flag_weekends_as_missing_data():
+    # Business days only, Mon 2024-01-01 (a holiday in most calendars, but this
+    # test only cares about weekday vs weekend, not public holidays) through
+    # Fri 2024-01-05, skipping the following Sat/Sun entirely -- this must not
+    # raise "incomplete NAV periods" the way a genuine weekday gap would.
+    dates = pd.bdate_range("2024-01-01", "2024-01-05")
+    nav = nav_frame({"FUND_A": [100.0, 101.0, 102.0, 101.5, 103.0]}, dates)
+    result = run_backtest(make_request(start_date="2024-01-01", end_date="2024-01-05", frequency="daily"), nav)
+    assert result["summary"]["ending_value"] == pytest.approx(1000.0 * 103.0 / 100.0)
+
+
+def test_daily_frequency_still_flags_a_genuine_weekday_gap():
+    # A business day (Wed 2024-01-03) is missing entirely from the panel --
+    # this is a real data gap, not a weekend, and must still be rejected.
+    dates = pd.to_datetime(["2024-01-01", "2024-01-02", "2024-01-04", "2024-01-05"])
+    nav = nav_frame({"FUND_A": [100.0, 101.0, 102.0, 103.0]}, dates)
+    with pytest.raises(ValueError, match="2024-01-03"):
+        run_backtest(make_request(start_date="2024-01-01", end_date="2024-01-05", frequency="daily"), nav)
+
+
+def test_daily_frequency_annualizes_with_252_periods_per_year():
+    dates = pd.bdate_range("2024-01-01", periods=6)
+    nav = nav_frame({"FUND_A": [100.0, 101.0, 100.5, 101.5, 102.0, 101.0]}, dates)
+    result = run_backtest(make_request(start_date=str(dates[0].date()), end_date=str(dates[-1].date()), frequency="daily"), nav)
+    returns = pd.Series([row["return"] for row in result["monthly_returns"]["rows"]])
+    assert result["summary"]["twrr_cagr"] == pytest.approx(annualized_return(returns, 252))
+    assert result["summary"]["volatility"] == pytest.approx(annualized_volatility(returns, 252))
+
+
+def test_monthly_frequency_is_unaffected_by_the_daily_option():
+    # Default behavior must be byte-for-byte the same as before this feature.
+    nav = nav_frame(
+        {"FUND_A": [100.0, 110.0, 121.0, 133.1]},
+        ["2020-01-31", "2020-02-29", "2020-03-31", "2020-04-30"],
+    )
+    result = run_backtest(make_request(), nav)
+    assert result["summary"]["ending_value"] == pytest.approx(1331.0)
+    assert result["summary"]["twrr_cagr"] == pytest.approx((1.1**3) ** (12 / 3) - 1)
 
 
 def test_flat_market_produces_zero_return_and_zero_drawdown():

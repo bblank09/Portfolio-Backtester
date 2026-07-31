@@ -3,7 +3,7 @@ from typing import Any, cast
 import numpy as np
 import pandas as pd
 
-from backend.app.domain.enums import CashflowTiming
+from backend.app.domain.enums import AlignmentFrequency, CashflowTiming
 from backend.app.domain.schemas import BacktestRequest
 from backend.app.engine.cashflows import cashflow_due, signed_cashflow_amount
 from backend.app.engine.metrics import (
@@ -28,6 +28,7 @@ from backend.app.engine.returns import (
 )
 
 PERIODS_PER_YEAR = 12
+DAILY_PERIODS_PER_YEAR = 252
 
 
 def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
@@ -46,13 +47,26 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
     # back together and understate its growth, corrupting excess return, beta,
     # alpha, tracking error and the information ratio.
     selected_panel = panel[sorted(required_columns)]
-    observed_periods = pd.PeriodIndex(panel.index, freq="M")
-    expected_periods = pd.period_range(observed_periods.min(), observed_periods.max(), freq="M")
-    incomplete_periods = {str(period) for period in expected_periods.difference(observed_periods.unique())}
-    incomplete_periods.update(
-        str(pd.Timestamp(index).to_period("M"))
-        for index in selected_panel.index[selected_panel.isna().any(axis=1)]
-    )
+    daily = request.data.frequency == AlignmentFrequency.daily
+    periods_per_year = DAILY_PERIODS_PER_YEAR if daily else PERIODS_PER_YEAR
+    if daily:
+        # Weekends are not missing data -- only a gap on an actual business
+        # day (a real closure or a hole in the cache) is incomplete.
+        expected_index = pd.bdate_range(panel.index.min(), panel.index.max())
+        observed_index = pd.DatetimeIndex(panel.index).normalize()
+        incomplete_periods = {str(day.date()) for day in expected_index.difference(observed_index)}
+        incomplete_periods.update(
+            str(pd.Timestamp(index).date())
+            for index in selected_panel.index[selected_panel.isna().any(axis=1)]
+        )
+    else:
+        observed_periods = pd.PeriodIndex(panel.index, freq="M")
+        expected_periods = pd.period_range(observed_periods.min(), observed_periods.max(), freq="M")
+        incomplete_periods = {str(period) for period in expected_periods.difference(observed_periods.unique())}
+        incomplete_periods.update(
+            str(pd.Timestamp(index).to_period("M"))
+            for index in selected_panel.index[selected_panel.isna().any(axis=1)]
+        )
     if incomplete_periods:
         periods = ", ".join(sorted(incomplete_periods))
         raise ValueError(f"Backtest cannot calculate with incomplete NAV periods for the selected funds or benchmark: {periods}.")
@@ -67,7 +81,7 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
     values = target_weights * request.initial_capital
 
     cost_rate = (request.costs.transaction_bps + request.costs.slippage_bps) / 10000
-    annual_drag_period = request.costs.annual_drag_pct / 100 / PERIODS_PER_YEAR
+    annual_drag_period = request.costs.annual_drag_pct / 100 / periods_per_year
     portfolio_rows = [{"date": panel.index[0], "value": float(values.sum())}]
     cashflow_rows = []
     rebalance_rows = []
@@ -161,22 +175,22 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
         ]
     )
     risk_free_rate = request.risk_free_rate_pct / 100
-    beta, alpha = beta_alpha(aligned_portfolio, aligned_benchmark, risk_free_rate, PERIODS_PER_YEAR)
-    sharpe = sharpe_ratio(portfolio_returns, risk_free_rate, PERIODS_PER_YEAR)
-    info_ratio = information_ratio(aligned_portfolio, aligned_benchmark, PERIODS_PER_YEAR)
+    beta, alpha = beta_alpha(aligned_portfolio, aligned_benchmark, risk_free_rate, periods_per_year)
+    sharpe = sharpe_ratio(portfolio_returns, risk_free_rate, periods_per_year)
+    info_ratio = information_ratio(aligned_portfolio, aligned_benchmark, periods_per_year)
 
     ending_value = float(portfolio_value.iloc[-1])
     summary = {
         "ending_value": ending_value,
         "twrr": time_weighted_return(portfolio_returns),
-        "twrr_cagr": annualized_return(portfolio_returns, PERIODS_PER_YEAR),
-        "volatility": annualized_volatility(portfolio_returns, PERIODS_PER_YEAR),
+        "twrr_cagr": annualized_return(portfolio_returns, periods_per_year),
+        "volatility": annualized_volatility(portfolio_returns, periods_per_year),
         "sharpe": sharpe,
         # Sortino penalises only downside dispersion; Calmar scales return by the
         # worst peak-to-trough loss. Both are reported next to Sharpe because a
         # single dispersion measure hides skew and tail depth.
-        "sortino": sortino_ratio(portfolio_returns, risk_free_rate, PERIODS_PER_YEAR),
-        "calmar": calmar_ratio(portfolio_returns, portfolio_value, PERIODS_PER_YEAR),
+        "sortino": sortino_ratio(portfolio_returns, risk_free_rate, periods_per_year),
+        "calmar": calmar_ratio(portfolio_returns, portfolio_value, periods_per_year),
         "var_95": historical_var(portfolio_returns, confidence=0.95),
         "var_99": historical_var(portfolio_returns, confidence=0.99),
         "max_drawdown": max_drawdown(portfolio_value),
@@ -190,7 +204,7 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
     risk_rows = [
         {"metric": "beta", "value": beta},
         {"metric": "alpha", "value": alpha},
-        {"metric": "tracking_error", "value": tracking_error(aligned_portfolio, aligned_benchmark, PERIODS_PER_YEAR)},
+        {"metric": "tracking_error", "value": tracking_error(aligned_portfolio, aligned_benchmark, periods_per_year)},
         {"metric": "information_ratio", "value": info_ratio},
         {"metric": "correlation", "value": correlation(aligned_portfolio, aligned_benchmark)},
     ]
@@ -210,7 +224,7 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
         "annual_returns": annual_return_table(portfolio_returns),
         "risk_metrics": {"title": "Benchmark Risk", "rows": risk_rows},
         "diversification": diversification_table(returns[asset_ids]),
-        "asset_metrics": asset_metrics_table(request, returns, values),
+        "asset_metrics": asset_metrics_table(request, returns, values, periods_per_year),
         "cashflows": [{"date": pd.Timestamp(row["date"]).date().isoformat(), "amount": row["amount"]} for row in cashflow_rows],
         "rebalances": [
             {"date": pd.Timestamp(row["date"]).date().isoformat(), "turnover": row["turnover"], "cost": row["cost"]}
@@ -256,7 +270,7 @@ def annual_return_table(returns: pd.Series) -> dict[str, Any]:
     return {"title": "Annual Returns", "rows": rows}
 
 
-def asset_metrics_table(request: BacktestRequest, returns: pd.DataFrame, final_values: pd.Series) -> dict[str, Any]:
+def asset_metrics_table(request: BacktestRequest, returns: pd.DataFrame, final_values: pd.Series, periods_per_year: int = PERIODS_PER_YEAR) -> dict[str, Any]:
     ending_total = float(final_values.sum())
     rows = []
     for asset in request.assets:
@@ -270,8 +284,8 @@ def asset_metrics_table(request: BacktestRequest, returns: pd.DataFrame, final_v
                 "target_weight_pct": asset.weight,
                 "final_weight_pct": final_weight_pct,
                 "drift_pct": final_weight_pct - asset.weight,
-                "cagr": annualized_return(asset_returns, PERIODS_PER_YEAR),
-                "volatility": annualized_volatility(asset_returns, PERIODS_PER_YEAR),
+                "cagr": annualized_return(asset_returns, periods_per_year),
+                "volatility": annualized_volatility(asset_returns, periods_per_year),
             }
         )
     return {"title": "Asset Risk and Allocation", "rows": rows}
