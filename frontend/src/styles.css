@@ -145,8 +145,8 @@ button, input, select { font-family: inherit; font-size: inherit; }
 
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible,
 [tabindex]:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent);
   border-radius: var(--r-sm);
 }
 
@@ -211,7 +211,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .brand .tag { display: none; }
 }
 
-.theme-toggle { border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-pill); padding: 5px 12px; font-size: 12px; color: var(--text-secondary); cursor: pointer; }
+.theme-toggle { border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-pill); height: 38px; padding: 0 16px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; }
 
 /* ---------- Layout ---------- */
 .main { display: flex; justify-content: center; padding: 28px 20px 60px; }
@@ -249,7 +249,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .holdings-row .remove-row { grid-area: remove; justify-self: end; }
 }
 .field { border: 1px solid var(--border-strong); border-radius: var(--r-sm); padding: 8px 10px; background: var(--surface-2); color: var(--text-primary); width: 100%; }
-.field:focus { outline: 2px solid var(--accent-soft-border); outline-offset: 0; border-color: var(--accent); }
+.field:focus { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); border-color: var(--accent); }
 .field.num { font-variant-numeric: tabular-nums; }
 .fund-field { position: relative; }
 .fund-field .field { padding-right: 30px; }
@@ -266,14 +266,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 .icon-btn {
   border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-sm);
-  width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: var(--text-tertiary);
 }
 .icon-btn:hover:not(:disabled) { color: var(--danger); border-color: var(--danger-soft-border); background: var(--danger-soft); }
 .icon-btn:disabled { opacity: .4; cursor: not-allowed; }
 
 .holdings-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; padding-top: 14px; border-top: 1px solid var(--border); flex-wrap: wrap; gap: 10px; }
-.add-asset { border: 1px solid var(--border-strong); background: var(--surface); border-radius: var(--r-sm); padding: 9px 15px; color: var(--accent); font-weight: 600; cursor: pointer; font-size: 13.5px; transition: background .12s, border-color .12s; }
+.add-asset { border: 1px solid var(--border-strong); background: var(--surface); border-radius: var(--r-sm); height: 38px; padding: 0 18px; color: var(--accent); font-weight: 650; cursor: pointer; font-size: 13.5px; transition: background .12s, border-color .12s; display: inline-flex; align-items: center; }
 .add-asset:hover { background: var(--accent-soft); border-color: var(--accent-soft-border); }
 
 .weight-total { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; display: flex; align-items: center; gap: 8px; }
@@ -362,7 +362,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 /* ---------- Buttons / footer nav ---------- */
 .actions { display: flex; justify-content: space-between; align-items: center; margin-top: 4px; gap: 12px; flex-wrap: wrap; }
-.btn { border: none; border-radius: var(--r-sm); padding: 11px 20px; font-weight: 600; font-size: 14px; cursor: pointer; transition: background .15s, box-shadow .15s, transform .1s; display: inline-flex; align-items: center; gap: 8px; }
+.btn {
+  border: none; border-radius: var(--r-sm); height: 38px; padding: 0 18px;
+  font-weight: 650; font-size: 13.5px; cursor: pointer;
+  transition: background .15s, box-shadow .15s, transform .1s;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+}
 .btn-primary { background: var(--accent); color: white; }
 .btn-primary:hover:not(:disabled) { background: var(--accent-hover); box-shadow: 0 4px 12px rgba(91, 33, 214, 0.28); transform: translateY(-1px); }
 .btn-primary:active:not(:disabled) { background: var(--accent-active); transform: translateY(0); box-shadow: none; }
@@ -402,14 +407,14 @@ p, small { color: var(--text-secondary); }
 
 .secondaryButton, .primaryButton, .iconButton {
   border: 1px solid var(--border-strong); border-radius: var(--r-sm); background: var(--surface); color: var(--text-primary);
-  min-height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 14px;
-  font-size: 13px; font-weight: 650; cursor: pointer; text-decoration: none;
+  height: 38px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 0 18px;
+  font-size: 13.5px; font-weight: 650; cursor: pointer; text-decoration: none;
   transition: background .12s, border-color .12s, box-shadow .12s;
 }
 .secondaryButton:hover { background: var(--surface-2); border-color: var(--border-strong); }
 .primaryButton { background: var(--accent); border-color: var(--accent); color: #fff; }
 .primaryButton:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
-.iconButton { width: 36px; padding: 0; }
+.iconButton { width: 38px; padding: 0; }
 
 .emptyResult { display: grid; place-items: center; justify-items: center; gap: 10px; text-align: center; color: var(--text-secondary); max-width: 340px; margin: 60px auto; }
 .emptyResultIcon { display: grid; place-items: center; width: 52px; height: 52px; border-radius: var(--r-lg); background: var(--accent-soft); color: var(--accent); }
