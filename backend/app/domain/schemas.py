@@ -81,6 +81,7 @@ class BacktestRequest(BaseModel):
 
 class MetricSummary(BaseModel):
     ending_value: float
+    irr: float | None = None
     twrr_cagr: float
     volatility: float
     sharpe: float | None = None

@@ -135,6 +135,12 @@ def formula_reference_section() -> str:
             "used_for": "TWRR CAGR, benchmark CAGR, CAPM alpha input",
         },
         {
+            "formula": "money_weighted_return",
+            "equation": "solve for r: sum_i(CF_i / (1 + r)^t_i) = 0",
+            "variables": "CF_i = investor-perspective cashflow at nominal elapsed year t_i (initial outlay, each contribution/withdrawal, terminal value)",
+            "used_for": "IRR (money-weighted return) -- diverges from TWRR CAGR when flow timing affects the investor's realised return",
+        },
+        {
             "formula": "annualized_volatility",
             "equation": "sigma_ann = std(r_t, ddof=1) * sqrt(m)",
             "variables": "std(..., ddof=1) = unbiased sample standard deviation, the same convention as the cov/var behind beta",
@@ -171,6 +177,7 @@ def summary_table(summary: dict[str, Any]) -> str:
         {"metric": "Ending value", "value": format_money(summary.get("ending_value"))},
         {"metric": "TWRR", "value": format_percent(summary.get("twrr"))},
         {"metric": "TWRR CAGR", "value": format_percent(summary.get("twrr_cagr"))},
+        {"metric": "IRR (money-weighted)", "value": format_percent(summary.get("irr"))},
         {"metric": "Volatility", "value": format_percent(summary.get("volatility"))},
         {"metric": "Sharpe", "value": format_number(summary.get("sharpe"))},
         {"metric": "Sortino", "value": format_number(summary.get("sortino"))},

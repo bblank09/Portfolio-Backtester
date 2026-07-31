@@ -21,6 +21,7 @@ from backend.app.engine.metrics import (
     downside_deviation,
     historical_var,
     max_drawdown,
+    rolling_correlation,
     sharpe_ratio,
     sortino_ratio,
     tracking_error,
@@ -794,6 +795,106 @@ def test_rebalance_costs_sum_to_reported_total_costs_when_drag_is_off():
     assert sum(row["cost"] for row in result["rebalances"]) == pytest.approx(
         result["summary"]["total_costs"]
     )
+
+
+def test_rolling_correlation_of_a_two_point_window_is_exactly_plus_or_minus_one():
+    # Pearson correlation of exactly 2 points is always +-1 (or undefined if
+    # either point pair is constant) -- a deterministic case perfect for a
+    # hand-derived check rather than trusting the implementation's own math.
+    asset_returns = pd.DataFrame(
+        {
+            "A": [0.01, 0.02, -0.01, 0.03],
+            "B": [0.02, 0.01, -0.02, 0.01],
+        }
+    )
+    rows = rolling_correlation(asset_returns, window=2)
+    values = [row["correlation"] for row in rows]
+    # window[0,1]: A rises, B falls -> -1. window[1,2] and window[2,3]: same
+    # direction both times -> +1.
+    assert values == pytest.approx([-1.0, 1.0, 1.0])
+    assert {row["asset_a"] for row in rows} == {"A"}
+    assert {row["asset_b"] for row in rows} == {"B"}
+
+
+def test_rolling_correlation_emits_one_series_per_unordered_asset_pair():
+    asset_returns = pd.DataFrame(
+        {
+            "A": [0.01, 0.02, -0.01, 0.03],
+            "B": [0.02, 0.01, -0.02, 0.01],
+            "C": [0.01, 0.02, -0.01, 0.03],
+        }
+    )
+    rows = rolling_correlation(asset_returns, window=2)
+    pairs = {(row["asset_a"], row["asset_b"]) for row in rows}
+    assert pairs == {("A", "B"), ("A", "C"), ("B", "C")}
+
+
+def test_rolling_correlation_against_a_constant_series_is_none_not_nan():
+    asset_returns = pd.DataFrame({"A": [0.01, 0.02, 0.03], "B": [0.01, 0.01, 0.01]})
+    rows = rolling_correlation(asset_returns, window=2)
+    assert all(row["correlation"] is None for row in rows)
+
+
+def test_engine_exposes_rolling_correlation_for_a_multi_asset_portfolio():
+    # A rolling 12-month correlation needs at least 13 monthly NAV points (12
+    # return observations) before the first window is even full.
+    dates = pd.date_range("2020-01-31", periods=14, freq="ME")
+    a_values = [100.0]
+    b_values = [100.0]
+    for step in range(1, 14):
+        a_values.append(a_values[-1] * (1.02 if step % 2 else 0.99))
+        b_values.append(b_values[-1] * (0.98 if step % 2 else 1.01))
+    nav = nav_frame({"FUND_A": a_values, "FUND_B": b_values}, dates)
+    request = make_request(
+        assets=[
+            {"proj_id": "FUND_A", "display_name": "A", "weight": 50},
+            {"proj_id": "FUND_B", "display_name": "B", "weight": 50},
+        ],
+        end_date=str(dates[-1].date()),
+    )
+    result = run_backtest(request, nav)
+    assert result["rolling_correlation"], "expected at least one rolling-correlation row"
+    assert {row["asset_a"] for row in result["rolling_correlation"]} == {"FUND_A"}
+    assert {row["asset_b"] for row in result["rolling_correlation"]} == {"FUND_B"}
+
+
+def test_irr_equals_cagr_when_there_are_no_intermediate_cashflows():
+    # With only an initial outlay and a terminal value, money-weighted return
+    # (IRR) and time-weighted return must agree exactly -- there is no
+    # intermediate flow for the two measures to disagree about.
+    nav = nav_frame(
+        {"FUND_A": [100.0, 110.0, 121.0, 133.1]},
+        ["2020-01-31", "2020-02-29", "2020-03-31", "2020-04-30"],
+    )
+    result = run_backtest(make_request(), nav)
+    assert result["summary"]["irr"] == pytest.approx(result["summary"]["twrr_cagr"], abs=1e-6)
+
+
+def test_irr_penalises_a_contribution_made_right_before_a_downturn():
+    # A lump sum invested at t=0 that grows steadily has one IRR. Adding a
+    # large contribution right before a loss must pull the money-weighted
+    # return down more than the time-weighted return, because more capital was
+    # exposed to the loss -- that is the entire reason IRR and TWRR diverge.
+    nav = nav_frame(
+        {"FUND_A": [100.0, 110.0, 88.0]},
+        ["2020-01-31", "2020-02-29", "2020-03-31"],
+    )
+    request = make_request(
+        end_date="2020-03-31",
+        cashflow={"enabled": True, "type": "contribution", "amount": 5000, "frequency": "monthly", "timing": "end"},
+    )
+    result = run_backtest(request, nav)
+    assert result["summary"]["irr"] < result["summary"]["twrr_cagr"]
+
+
+def test_irr_is_none_when_it_cannot_be_solved():
+    # All-positive cashflows (huge contribution keeps growing, nothing ever
+    # comes back out relative to what went in) can leave no rate in range
+    # solving NPV = 0; money_weighted_return already returns None for that
+    # rather than raising, and the engine must not crash on it.
+    from backend.app.engine.returns import money_weighted_return
+
+    assert money_weighted_return([(0.0, 100.0), (1.0, 100.0)]) is None
 
 
 def test_summary_reports_var_95_and_var_99():

@@ -16,12 +16,14 @@ from backend.app.engine.metrics import (
     historical_var,
     information_ratio,
     max_drawdown,
+    rolling_correlation,
     sharpe_ratio,
     sortino_ratio,
     tracking_error,
 )
 from backend.app.engine.rebalancing import rebalance_due, rebalance_values
 from backend.app.engine.returns import (
+    money_weighted_return,
     simple_returns,
     time_weighted_return,
     wealth_index,
@@ -102,7 +104,7 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
                 total_contributed += applied_cashflow
             else:
                 total_withdrawn += abs(applied_cashflow)
-            cashflow_rows.append({"date": current_date, "amount": applied_cashflow})
+            cashflow_rows.append({"date": current_date, "amount": applied_cashflow, "position": position})
 
         period_returns = returns.loc[current_date]
         values = values * (1 + period_returns)
@@ -118,7 +120,7 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
                 total_contributed += applied_cashflow
             else:
                 total_withdrawn += abs(applied_cashflow)
-            cashflow_rows.append({"date": current_date, "amount": applied_cashflow})
+            cashflow_rows.append({"date": current_date, "amount": applied_cashflow, "position": position})
 
         if rebalance_due(
             current_date,
@@ -180,8 +182,12 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
     info_ratio = information_ratio(aligned_portfolio, aligned_benchmark, periods_per_year)
 
     ending_value = float(portfolio_value.iloc[-1])
+    irr = money_weighted_return(
+        irr_cashflows(request.initial_capital, cashflow_rows, periods_per_year, len(panel) - 1, ending_value)
+    )
     summary = {
         "ending_value": ending_value,
+        "irr": irr,
         "twrr": time_weighted_return(portfolio_returns),
         "twrr_cagr": annualized_return(portfolio_returns, periods_per_year),
         "volatility": annualized_volatility(portfolio_returns, periods_per_year),
@@ -224,6 +230,10 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
         "annual_returns": annual_return_table(portfolio_returns),
         "risk_metrics": {"title": "Benchmark Risk", "rows": risk_rows},
         "diversification": diversification_table(returns[asset_ids]),
+        "rolling_correlation": [
+            {"date": pd.Timestamp(row["date"]).date().isoformat(), "asset_a": row["asset_a"], "asset_b": row["asset_b"], "correlation": row["correlation"]}
+            for row in rolling_correlation(returns[asset_ids], window=periods_per_year)
+        ],
         "asset_metrics": asset_metrics_table(request, returns, values, periods_per_year),
         "cashflows": [{"date": pd.Timestamp(row["date"]).date().isoformat(), "amount": row["amount"]} for row in cashflow_rows],
         "rebalances": [
@@ -240,6 +250,31 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
             "beta_alpha",
         ],
     }
+
+
+def irr_cashflows(
+    initial_capital: float,
+    cashflow_rows: list[dict[str, Any]],
+    periods_per_year: int,
+    final_position: int,
+    ending_value: float,
+) -> list[tuple[float, float]]:
+    """Build the investor-perspective cashflow series money_weighted_return expects.
+
+    Time is nominal elapsed years (period position / periods_per_year), the same
+    convention every other annualized figure in this engine uses -- not actual
+    calendar days. NAV dates land on real month-end/business-day calendars, so
+    "3 months" is not exactly 91.31 days; using calendar time would make IRR
+    diverge from TWRR CAGR even with zero intermediate cashflows, when the two
+    should agree exactly in that case. cashflow_rows carries the portfolio's
+    sign (positive = contribution in, negative = withdrawal out); IRR needs the
+    investor's sign, which is the opposite -- money the investor puts in is an
+    outflow from their pocket, money they take out is an inflow.
+    """
+    events = [(0.0, -float(initial_capital))]
+    events.extend((row["position"] / periods_per_year, -float(row["amount"])) for row in cashflow_rows)
+    events.append((final_position / periods_per_year, float(ending_value)))
+    return events
 
 
 def apply_cashflow(values: pd.Series, target_weights: pd.Series, cashflow: float) -> float:

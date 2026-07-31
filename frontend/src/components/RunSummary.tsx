@@ -218,6 +218,13 @@ function MetricsTab({ result }: { result: BacktestResult }) {
         <h3>Diversification Check</h3>
         <DataTable section={{ title: "", rows: result.diversification.rows }} />
       </section>
+      {result.rolling_correlation.length ? (
+        <section className="chartPanel">
+          <h3>Rolling correlation</h3>
+          <p className="summaryText">A single end-of-run correlation can hide regime changes; this tracks each asset pair's correlation over a rolling window.</p>
+          <AxisCurve title="Rolling asset-pair correlation" series={rollingCorrelationSeries(result)} valueFormat={number.format} />
+        </section>
+      ) : null}
       <section className="chartPanel">
         <h3>Benchmark risk decomposition</h3>
         <DataTable section={{ title: "", rows: benchmarkDecompositionRows(result, derived) }} />
@@ -920,6 +927,7 @@ function keyMetricRows(result: BacktestResult) {
     { metric: "Ending value", value: money.format(m.ending_value), formula: "Portfolio value after returns, cashflows, costs, and rebalancing" },
     { metric: "TWRR", value: pct.format(m.twrr), formula: "Product of linked sub-period returns minus 1" },
     { metric: "TWRR CAGR", value: pct.format(m.twrr_cagr), formula: "(1 + TWRR)^(1/years) - 1" },
+    { metric: "IRR (money-weighted)", value: formatPercentLike(m.irr), formula: "Solve for r where sum(cashflow_i / (1+r)^year_i) = 0; diverges from CAGR when flow timing matters" },
     { metric: "Volatility", value: pct.format(m.volatility), formula: "Std(monthly returns) * sqrt(12)" },
     { metric: "Sharpe ratio", value: formatNumber(m.sharpe), formula: "Annualized excess return / annualized volatility" },
     { metric: "Sortino ratio", value: formatNumber(m.sortino), formula: "Annualized excess return / downside deviation (penalises losses only)" },
@@ -974,12 +982,16 @@ function formulaReferenceRows() {
     { metric: "Simple return", formula: "r_t = NAV_t / NAV_(t-1) - 1" },
     { metric: "Time-weighted return (TWRR)", formula: "TWRR = Prod(1 + r_t) - 1, cashflow periods excluded from r_t" },
     { metric: "TWRR CAGR", formula: "(1 + TWRR)^(1/years) - 1" },
-    { metric: "Annualized volatility", formula: "Std(monthly returns, population) * sqrt(12)" },
+    { metric: "IRR (money-weighted)", formula: "Solve for r: sum(cashflow_i / (1+r)^year_i) = 0, investor-perspective flows at nominal elapsed years" },
+    { metric: "Annualized volatility", formula: "Std(monthly returns, sample, ddof=1) * sqrt(12)" },
     { metric: "Sharpe ratio", formula: "(Annualized return - risk-free rate) / annualized volatility" },
+    { metric: "Sortino ratio", formula: "(Annualized return - risk-free rate) / downside deviation (losses only)" },
+    { metric: "Calmar ratio", formula: "Annualized return / |maximum drawdown|" },
+    { metric: "Value at Risk (historical)", formula: "max(0, -percentile(monthly returns, (1 - confidence) * 100))" },
     { metric: "Maximum drawdown", formula: "min(Value_t / running_peak_t - 1)" },
     { metric: "Beta", formula: "Cov(portfolio, benchmark) / Var(benchmark), sample" },
     { metric: "Alpha (CAPM residual)", formula: "portfolio CAGR - (risk-free + beta * (benchmark CAGR - risk-free))" },
-    { metric: "Tracking error", formula: "Std(portfolio_return - benchmark_return) * sqrt(12)" },
+    { metric: "Tracking error", formula: "Std(portfolio_return - benchmark_return, sample, ddof=1) * sqrt(12)" },
     { metric: "Information ratio", formula: "(portfolio CAGR - benchmark CAGR) / tracking error" },
     { metric: "Correlation", formula: "Pearson correlation of aligned monthly returns" },
     { metric: "Rebalance turnover", formula: "sum(|target_value_i - current_value_i|) / 2 / portfolio_value, one-way fraction" },
@@ -1003,6 +1015,24 @@ function stressInterpretationRows(result: BacktestResult, derived: ReturnType<ty
     { check: "Recovery pressure", result: `${derived.drawdownPeriods[0]?.months ?? 0} months in the deepest drawdown period` },
     { check: "Benchmark stress", result: `Portfolio beta ${formatNumber(findRiskValue(result, "beta"))}; benchmark shocks are translated through historical beta` }
   ];
+}
+
+const CORRELATION_PALETTE = ["#5b21d6", "#0ea5e9", "#92620a", "#b42318", "#0f766e", "#6b7280"];
+
+function rollingCorrelationSeries(result: BacktestResult): ChartSeries[] {
+  const byPair = new Map<string, { label: string; points: TimeSeriesPoint[] }>();
+  for (const row of result.rolling_correlation) {
+    if (row.correlation === null) continue;
+    const key = `${row.asset_a} vs ${row.asset_b}`;
+    if (!byPair.has(key)) byPair.set(key, { label: key, points: [] });
+    byPair.get(key)!.points.push({ date: row.date, value: row.correlation });
+  }
+  return [...byPair.values()].map((series, index) => ({
+    label: series.label,
+    points: series.points,
+    color: CORRELATION_PALETTE[index % CORRELATION_PALETTE.length],
+    valueFormat: number.format
+  }));
 }
 
 function assetRows(result: BacktestResult) {
@@ -1132,7 +1162,7 @@ function reportMarkdown(result: BacktestResult, derived: ReturnType<typeof deriv
     { title: "1. Research question", body: resultNarrative(result) },
     {
       title: "2. Data and methodology",
-      body: "All returns are computed from cached SEC Open Data mutual fund NAV series (month-end frequency, m = 12 periods/year). No mock, simulated, or forecast price series are used. Fund period returns use simple returns r_t = NAV_t / NAV_(t-1) - 1; missing NAV observations are never forward-filled into a fabricated return. Portfolio time-weighted return removes external cashflows using the configured timing so contributions/withdrawals do not themselves create investment return."
+      body: `All returns are computed from cached SEC Open Data mutual fund NAV series (${result.request.data.frequency === "daily" ? "daily, business-day frequency, m = 252 periods/year" : "month-end frequency, m = 12 periods/year"}). No mock, simulated, or forecast price series are used. Fund period returns use simple returns r_t = NAV_t / NAV_(t-1) - 1; missing NAV observations are never forward-filled into a fabricated return. Portfolio time-weighted return removes external cashflows using the configured timing so contributions/withdrawals do not themselves create investment return.`
     },
     { title: "3. Portfolio specification", body: markdownTable(assumptionRows(result)) },
     { title: "4. Performance results", body: markdownTable(keyMetricRows(result)) },

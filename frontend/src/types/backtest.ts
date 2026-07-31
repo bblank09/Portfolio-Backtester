@@ -61,6 +61,7 @@ export interface BacktestRequest {
 
 export interface MetricSummary {
   ending_value: number;
+  irr: number | null;
   twrr_cagr: number;
   volatility: number;
   sharpe: number | null;
@@ -110,6 +111,7 @@ export interface BacktestResult {
   annual_returns: TableSection;
   risk_metrics: TableSection;
   diversification: TableSection;
+  rolling_correlation: { date: string; asset_a: string; asset_b: string; correlation: number | null }[];
   asset_metrics: TableSection;
   quality_issues: QualityIssue[];
   formula_references: string[];

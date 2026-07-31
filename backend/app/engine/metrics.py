@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 import pandas as pd
 
@@ -58,6 +60,33 @@ def max_drawdown(values: pd.Series) -> float:
 def drawdown_series(values: pd.Series) -> pd.Series:
     clean = values.dropna()
     return clean / clean.cummax() - 1
+
+
+def rolling_correlation(asset_returns: pd.DataFrame, window: int) -> list[dict[str, Any]]:
+    """Rolling Pearson correlation for every unordered pair of held assets.
+
+    The static end-of-run correlation matrix (diversification_table) hides
+    regime changes -- two funds can average a low correlation over years while
+    having moved in lockstep during the exact period that mattered. A rolling
+    window surfaces that. Returns one row per (pair, date) once the window is
+    full; correlation against a zero-variance window is undefined (0/0 -> NaN)
+    and reported as None rather than leaking a NaN float.
+    """
+    columns = list(asset_returns.columns)
+    rows: list[dict[str, Any]] = []
+    for left_index, left in enumerate(columns):
+        for right in columns[left_index + 1 :]:
+            series = asset_returns[left].rolling(window).corr(asset_returns[right]).dropna()
+            for index, value in series.items():
+                rows.append(
+                    {
+                        "date": index,
+                        "asset_a": left,
+                        "asset_b": right,
+                        "correlation": float(value) if np.isfinite(value) else None,
+                    }
+                )
+    return rows
 
 
 def historical_var(returns: pd.Series, confidence: float, min_observations: int = 3) -> float | None:
