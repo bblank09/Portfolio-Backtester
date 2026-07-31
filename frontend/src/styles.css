@@ -448,6 +448,15 @@ p, small { color: var(--text-secondary); }
 .clickableMetric { cursor: pointer; }
 .clickableMetric:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), var(--shadow-sm); transform: translateY(-1px); }
 
+.metricCard-emphasis {
+  background: var(--accent-soft); border-color: var(--accent-soft-border);
+  grid-column: span 2;
+}
+.metricCard-emphasis span { color: var(--accent); }
+.metricCard-emphasis strong { font-size: 32px; color: var(--text-primary); }
+.metricCard-positive strong { color: var(--success); }
+.metricCard-negative strong { color: var(--danger); }
+
 .summaryText { margin-top: 8px; color: var(--text-secondary); font-size: 14px; line-height: 1.55; }
 
 .issueBox, .errorBanner {

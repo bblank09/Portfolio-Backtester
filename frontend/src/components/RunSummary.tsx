@@ -27,6 +27,14 @@ interface SummaryMetric {
   label: string;
   value: string;
   sub?: string;
+  tone?: "positive" | "negative";
+  emphasis?: boolean;
+}
+
+function toneOf(value: number): "positive" | "negative" | undefined {
+  if (value > 0) return "positive";
+  if (value < 0) return "negative";
+  return undefined;
 }
 
 export function RunSummary({ result }: Props) {
@@ -88,7 +96,9 @@ function SummaryTab({ result, setActiveTab }: { result: BacktestResult; setActiv
         <p className="summaryText">{resultNarrative(result)}</p>
       </section>
       <div className="metricGrid">
-        {metrics.map((metric) => <Metric key={metric.label} label={metric.label} value={metric.value} sub={metric.sub} />)}
+        {metrics.map((metric) => (
+          <Metric key={metric.label} emphasis={metric.emphasis} label={metric.label} sub={metric.sub} tone={metric.tone} value={metric.value} />
+        ))}
       </div>
       <section className="chartPanel">
         <h3>Result checklist</h3>
@@ -373,9 +383,22 @@ function ReportSection({ title, children }: { title: string; children: ReactNode
   );
 }
 
-function Metric({ label, value, sub = "" }: { label: string; value: string; sub?: string }) {
+function Metric({
+  label,
+  value,
+  sub = "",
+  tone,
+  emphasis
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  tone?: "positive" | "negative";
+  emphasis?: boolean;
+}) {
+  const className = ["metricCard", emphasis ? "metricCard-emphasis" : "", tone ? `metricCard-${tone}` : ""].filter(Boolean).join(" ");
   return (
-    <div className="metricCard">
+    <div className={className}>
       <span>{label}</span>
       <strong>{value}</strong>
       {sub ? <small>{sub}</small> : null}
@@ -844,12 +867,12 @@ function prepareSeries(series: ChartSeries[]) {
 function summaryMetrics(result: BacktestResult): SummaryMetric[] {
   const m = result.summary;
   const rows: SummaryMetric[] = [
-    { label: "Ending value", value: money.format(m.ending_value) },
-    { label: "TWRR CAGR", value: pct.format(m.twrr_cagr) },
+    { label: "Ending value", value: money.format(m.ending_value), emphasis: true },
+    { label: "TWRR CAGR", value: pct.format(m.twrr_cagr), tone: toneOf(m.twrr_cagr) },
     { label: "Volatility", value: pct.format(m.volatility) },
-    { label: "Sharpe", value: formatNumber(m.sharpe) },
+    { label: "Sharpe", value: formatNumber(m.sharpe), tone: m.sharpe === null ? undefined : toneOf(m.sharpe) },
     { label: "Max drawdown", value: pct.format(m.max_drawdown) },
-    { label: "Excess vs benchmark", value: formatPercentLike(m.benchmark_excess_return) }
+    { label: "Excess vs benchmark", value: formatPercentLike(m.benchmark_excess_return), tone: m.benchmark_excess_return === null ? undefined : toneOf(m.benchmark_excess_return) }
   ];
   if (result.request.cashflow.enabled) {
     rows.push(
