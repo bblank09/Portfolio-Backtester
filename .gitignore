@@ -1,4 +1,5 @@
 .DS_Store
+logo_credit/
 .env
 .venv/
 .mypy_cache/
