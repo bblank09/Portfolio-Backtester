@@ -97,7 +97,7 @@ export function BacktestWorkspace() {
     <div className="shell">
       <header className="topbar">
         <div className="brand">
-          <div className="mark">PB</div>
+          <img alt="Portfolio Backtester" className="mark" src="/brand/topbar-mark.png" />
           <span>Portfolio Backtester</span>
           <span className="tag">Historical portfolio backtesting</span>
         </div>
