@@ -121,4 +121,3 @@ class BacktestResult(BaseModel):
     diversification: TableSection
     asset_metrics: TableSection
     quality_issues: list[QualityIssue]
-    formula_references: list[str]

@@ -114,5 +114,4 @@ export interface BacktestResult {
   rolling_correlation: { date: string; asset_a: string; asset_b: string; correlation: number | null }[];
   asset_metrics: TableSection;
   quality_issues: QualityIssue[];
-  formula_references: string[];
 }

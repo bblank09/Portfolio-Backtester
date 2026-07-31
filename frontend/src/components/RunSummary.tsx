@@ -229,10 +229,7 @@ function MetricsTab({ result }: { result: BacktestResult }) {
         <h3>Benchmark risk decomposition</h3>
         <DataTable section={{ title: "", rows: benchmarkDecompositionRows(result, derived) }} />
       </section>
-      <section className="chartPanel">
-        <h3>Formula References</h3>
-        <DataTable section={{ title: "", rows: result.formula_references.map((formula) => ({ formula })) }} compact />
-      </section>
+      <p className="footnote">Full equations for every metric on this page are in the Report tab's Formula reference section.</p>
     </div>
   );
 }

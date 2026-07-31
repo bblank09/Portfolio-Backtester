@@ -241,14 +241,6 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
             for row in rebalance_rows
         ],
         "quality_issues": [],
-        "formula_references": [
-            "simple_returns",
-            "time_weighted_return",
-            "annualized_return",
-            "annualized_volatility",
-            "max_drawdown",
-            "beta_alpha",
-        ],
     }
 
 
