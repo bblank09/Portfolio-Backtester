@@ -1,4 +1,4 @@
-import type { BacktestRequest, BacktestResult, SecFund } from "../types/backtest";
+import type { BacktestRequest, BacktestResult, DataStatus, SecFund } from "../types/backtest";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "";
 
@@ -41,6 +41,10 @@ async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
 export async function fetchFunds(): Promise<SecFund[]> {
   const payload = await requestJson<{ data_source: "sec_open_data"; funds: SecFund[] }>("/api/funds");
   return payload.funds;
+}
+
+export async function fetchDataStatus(): Promise<DataStatus> {
+  return requestJson<DataStatus>("/api/data-status");
 }
 
 export async function runBacktest(payload: BacktestRequest): Promise<BacktestResult> {

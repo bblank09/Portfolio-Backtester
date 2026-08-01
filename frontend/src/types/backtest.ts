@@ -9,6 +9,11 @@ export interface SecFundAllocation {
   weight: number;
 }
 
+export interface DataStatus {
+  nav_as_of: string;
+  fund_count: number;
+}
+
 export interface SecFund {
   proj_id: string;
   unique_id: string;

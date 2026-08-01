@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchFunds, runBacktest } from "../api/client";
+import { fetchDataStatus, fetchFunds, runBacktest } from "../api/client";
 import { AssumptionsStep } from "../components/AssumptionsStep";
 import { PortfolioStep } from "../components/PortfolioStep";
 import { RunOverlay } from "../components/RunOverlay";
@@ -22,6 +22,7 @@ const initialRequest: BacktestRequest = {
 
 export function BacktestWorkspace() {
   const [funds, setFunds] = useState<SecFund[]>([]);
+  const [navAsOf, setNavAsOf] = useState<string | null>(null);
   const [request, setRequest] = useState<BacktestRequest>(initialRequest);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [error, setError] = useState("");
@@ -39,6 +40,15 @@ export function BacktestWorkspace() {
     fetchFunds()
       .then((loadedFunds) => setFunds(loadedFunds))
       .catch((caught: Error) => setError(caught.message));
+  }, []);
+
+  useEffect(() => {
+    // Best-effort only -- not knowing the NAV freshness date shouldn't block
+    // using the app, so failures here are silently ignored rather than
+    // surfaced as a page-level error.
+    fetchDataStatus()
+      .then((status) => setNavAsOf(status.nav_as_of))
+      .catch(() => setNavAsOf(null));
   }, []);
 
   const totalWeight = request.assets.reduce((sum, asset) => sum + asset.weight, 0);
@@ -100,6 +110,7 @@ export function BacktestWorkspace() {
           <img alt="Portfolio Backtester" className="mark" src="/brand/topbar-mark.png" />
           <span>Portfolio Backtester</span>
           <span className="tag">Historical portfolio backtesting</span>
+          {navAsOf ? <span className="tag nav-as-of">NAV data as of {formatNavDate(navAsOf)}</span> : null}
         </div>
         <Stepper currentStep={currentStep} unlockedStep={unlockedStep} onStepClick={goToStep} />
         <button className="theme-toggle" onClick={() => setTheme((current) => (current === "light" ? "dark" : "light"))} type="button">
@@ -145,6 +156,12 @@ export function BacktestWorkspace() {
       <RunOverlay open={loading} />
     </div>
   );
+}
+
+function formatNavDate(isoDate: string): string {
+  const parsed = new Date(`${isoDate}T00:00:00Z`);
+  if (Number.isNaN(parsed.getTime())) return isoDate;
+  return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 function validateRequest(request: BacktestRequest, totalWeight: number) {
