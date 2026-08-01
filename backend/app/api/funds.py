@@ -6,7 +6,7 @@ from fastapi import APIRouter
 from backend.app.core.errors import AppHTTPException
 from backend.app.domain.enums import ErrorCode
 
-router = APIRouter(prefix="/api/funds", tags=["funds"])
+router = APIRouter(prefix="/funds", tags=["funds"])
 UNIVERSE_PATH = Path("data/sec/mvp_fund_universe.csv")
 
 

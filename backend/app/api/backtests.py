@@ -20,7 +20,7 @@ from backend.app.engine.backtest import run_backtest
 from backend.app.reports.artifacts import write_research_report
 from backend.app.sec.cache import load_nav_panel
 
-router = APIRouter(prefix="/api/backtests", tags=["backtests"])
+router = APIRouter(prefix="/backtests", tags=["backtests"])
 RUNS_DIR = Path("data/runs")
 logger = logging.getLogger("app.backtests")
 

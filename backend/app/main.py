@@ -46,8 +46,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-app.include_router(funds_router)
-app.include_router(backtests_router)
+app.include_router(funds_router, prefix="/api/v1")
+app.include_router(backtests_router, prefix="/api/v1")
+# Unversioned alias kept during the migration window -- the current frontend
+# (and every existing client) still calls these paths directly. Drop this
+# once all clients are confirmed to be on /api/v1.
+app.include_router(funds_router, prefix="/api")
+app.include_router(backtests_router, prefix="/api")
 
 
 @app.get("/api/health")
