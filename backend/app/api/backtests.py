@@ -8,9 +8,10 @@ from typing import Any
 from uuid import uuid4
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import PlainTextResponse
 
+from backend.app.core.limiter import limiter
 from backend.app.data.quality import align_nav_panel, validate_nav_panel
 from backend.app.domain.schemas import BacktestRequest
 from backend.app.engine.backtest import run_backtest
@@ -28,30 +29,31 @@ def min_complete_observations_for(frequency: str) -> int:
 
 
 @router.post("")
-def create_backtest(request: BacktestRequest) -> dict[str, Any]:
-    proj_ids = sorted({asset.proj_id for asset in request.assets} | {request.benchmark_proj_id})
+@limiter.limit("10/minute")
+def create_backtest(request: Request, backtest_request: BacktestRequest) -> dict[str, Any]:
+    proj_ids = sorted({asset.proj_id for asset in backtest_request.assets} | {backtest_request.benchmark_proj_id})
     started = time.monotonic()
     logger.info(
         "backtest request: assets=%s benchmark=%s start=%s end=%s",
-        proj_ids, request.benchmark_proj_id, request.start_date, request.end_date,
+        proj_ids, backtest_request.benchmark_proj_id, backtest_request.start_date, backtest_request.end_date,
     )
     try:
-        if request.data.source != "sec_open_data":
+        if backtest_request.data.source != "sec_open_data":
             raise HTTPException(status_code=400, detail="Production backtests only support SEC Open Data.")
 
         try:
-            nav = align_nav_panel(load_nav_panel(proj_ids), frequency=request.data.frequency)
+            nav = align_nav_panel(load_nav_panel(proj_ids), frequency=backtest_request.data.frequency)
         except FileNotFoundError as exc:
             raise HTTPException(status_code=503, detail="SEC NAV cache is missing. Run scripts/sec_download_mvp.py.") from exc
 
-        selected_nav = nav.loc[pd.Timestamp(request.start_date) : pd.Timestamp(request.end_date), proj_ids]
+        selected_nav = nav.loc[pd.Timestamp(backtest_request.start_date) : pd.Timestamp(backtest_request.end_date), proj_ids]
         quality_issues = validate_nav_panel(
             selected_nav,
-            as_of=pd.Timestamp(request.end_date),
-            min_complete_observations=min_complete_observations_for(request.data.frequency),
+            as_of=pd.Timestamp(backtest_request.end_date),
+            min_complete_observations=min_complete_observations_for(backtest_request.data.frequency),
         )
         try:
-            result = run_backtest(request, nav)
+            result = run_backtest(backtest_request, nav)
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -59,14 +61,14 @@ def create_backtest(request: BacktestRequest) -> dict[str, Any]:
         result["run_id"] = make_run_id()
         result["created_at"] = utc_now().isoformat(timespec="seconds").replace("+00:00", "Z")
         result["data_source"] = "sec_open_data"
-        persist_run(result["run_id"], request, result)
+        persist_run(result["run_id"], backtest_request, result)
     except Exception:
         # Logged here (with the fund ids that caused it) in addition to
         # whatever the global exception handler does, because that handler
         # only sees the exception, not which request triggered it.
         logger.exception(
             "backtest request failed: assets=%s benchmark=%s duration=%.3fs",
-            proj_ids, request.benchmark_proj_id, time.monotonic() - started,
+            proj_ids, backtest_request.benchmark_proj_id, time.monotonic() - started,
         )
         raise
 

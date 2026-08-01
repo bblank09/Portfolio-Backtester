@@ -5,15 +5,21 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from backend.app.api.backtests import router as backtests_router
 from backend.app.api.funds import router as funds_router
 from backend.app.core.config import settings
+from backend.app.core.limiter import limiter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("app")
 
 app = FastAPI(title="SEC Open Data Portfolio Backtester", version="0.1.0")
+
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
 @app.exception_handler(Exception)
