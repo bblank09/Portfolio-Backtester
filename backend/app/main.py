@@ -10,6 +10,7 @@ from backend.app.api.backtests import router as backtests_router
 from backend.app.api.funds import router as funds_router
 from backend.app.core.config import settings
 
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 logger = logging.getLogger("app")
 
 app = FastAPI(title="SEC Open Data Portfolio Backtester", version="0.1.0")

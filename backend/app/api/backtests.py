@@ -1,5 +1,7 @@
 import json
+import logging
 import math
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -17,6 +19,7 @@ from backend.app.sec.cache import load_nav_panel
 
 router = APIRouter(prefix="/api/backtests", tags=["backtests"])
 RUNS_DIR = Path("data/runs")
+logger = logging.getLogger("app.backtests")
 
 
 def min_complete_observations_for(frequency: str) -> int:
@@ -26,31 +29,51 @@ def min_complete_observations_for(frequency: str) -> int:
 
 @router.post("")
 def create_backtest(request: BacktestRequest) -> dict[str, Any]:
-    if request.data.source != "sec_open_data":
-        raise HTTPException(status_code=400, detail="Production backtests only support SEC Open Data.")
-
     proj_ids = sorted({asset.proj_id for asset in request.assets} | {request.benchmark_proj_id})
-    try:
-        nav = align_nav_panel(load_nav_panel(proj_ids), frequency=request.data.frequency)
-    except FileNotFoundError as exc:
-        raise HTTPException(status_code=503, detail="SEC NAV cache is missing. Run scripts/sec_download_mvp.py.") from exc
-
-    selected_nav = nav.loc[pd.Timestamp(request.start_date) : pd.Timestamp(request.end_date), proj_ids]
-    quality_issues = validate_nav_panel(
-        selected_nav,
-        as_of=pd.Timestamp(request.end_date),
-        min_complete_observations=min_complete_observations_for(request.data.frequency),
+    started = time.monotonic()
+    logger.info(
+        "backtest request: assets=%s benchmark=%s start=%s end=%s",
+        proj_ids, request.benchmark_proj_id, request.start_date, request.end_date,
     )
     try:
-        result = run_backtest(request, nav)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        if request.data.source != "sec_open_data":
+            raise HTTPException(status_code=400, detail="Production backtests only support SEC Open Data.")
 
-    result["quality_issues"] = quality_issues
-    result["run_id"] = make_run_id()
-    result["created_at"] = utc_now().isoformat(timespec="seconds").replace("+00:00", "Z")
-    result["data_source"] = "sec_open_data"
-    persist_run(result["run_id"], request, result)
+        try:
+            nav = align_nav_panel(load_nav_panel(proj_ids), frequency=request.data.frequency)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=503, detail="SEC NAV cache is missing. Run scripts/sec_download_mvp.py.") from exc
+
+        selected_nav = nav.loc[pd.Timestamp(request.start_date) : pd.Timestamp(request.end_date), proj_ids]
+        quality_issues = validate_nav_panel(
+            selected_nav,
+            as_of=pd.Timestamp(request.end_date),
+            min_complete_observations=min_complete_observations_for(request.data.frequency),
+        )
+        try:
+            result = run_backtest(request, nav)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+        result["quality_issues"] = quality_issues
+        result["run_id"] = make_run_id()
+        result["created_at"] = utc_now().isoformat(timespec="seconds").replace("+00:00", "Z")
+        result["data_source"] = "sec_open_data"
+        persist_run(result["run_id"], request, result)
+    except Exception:
+        # Logged here (with the fund ids that caused it) in addition to
+        # whatever the global exception handler does, because that handler
+        # only sees the exception, not which request triggered it.
+        logger.exception(
+            "backtest request failed: assets=%s benchmark=%s duration=%.3fs",
+            proj_ids, request.benchmark_proj_id, time.monotonic() - started,
+        )
+        raise
+
+    logger.info(
+        "backtest request succeeded: run_id=%s duration=%.3fs",
+        result["run_id"], time.monotonic() - started,
+    )
     return to_jsonable(result)
 
 
