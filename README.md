@@ -127,6 +127,25 @@ npm --prefix frontend install
 
 Copy `.env.example` to `.env` and set `SEC_API_KEY` only if you need to download or refresh SEC data — running a backtest against the committed local NAV cache does **not** call the SEC API and does not require a key.
 
+### Docker (recommended for deployment)
+
+The `Dockerfile` builds the frontend and installs the backend in one multi-stage image; FastAPI serves the built static frontend itself, so the whole app is a single container on one port — nothing extra to host or configure CORS for.
+
+```bash
+docker compose up -d --build
+```
+
+This starts the app on `http://localhost:8000` and creates a named Docker volume (`pb-data`) mounted at `/app/data`, so the SEC NAV cache and saved run artifacts survive container rebuilds and redeploys. Docker auto-seeds that volume from the image's own baked-in `data/` on first start, so the cache is there immediately.
+
+The compose file deliberately uses a **named volume**, not a `./data:/app/data` host bind-mount: Docker's bind-mount path parsing breaks when the host path contains a `:` (as this project's own directory name does — see the venv note above), and a managed volume also matches how most hosts (Render, Railway, Fly.io) provision persistent storage anyway.
+
+To build and run without compose:
+
+```bash
+docker build -t portfolio-backtester .
+docker run -p 8000:8000 -v pb-data:/app/data portfolio-backtester
+```
+
 ## 8. Usage
 
 **Run the dev servers** (from the repository root, so cache/run-artifact paths resolve correctly):

@@ -1,5 +1,9 @@
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.backtests import router as backtests_router
 from backend.app.api.funds import router as funds_router
@@ -19,3 +23,20 @@ app.include_router(backtests_router)
 @app.get("/api/health")
 def health() -> dict[str, str]:
     return {"status": "ok", "data_source": "sec_open_data"}
+
+
+# Production convenience: when a built frontend is present (Docker image, or
+# `npm run build` run locally), serve it from the same FastAPI process/port so
+# there is nothing extra to host or CORS-configure. In dev, the frontend runs
+# under its own Vite server instead and frontend/dist never exists, so none of
+# this registers -- `npm run dev` is completely unaffected.
+FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
+if FRONTEND_DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="frontend-assets")
+
+    @app.get("/{full_path:path}")
+    def serve_frontend(full_path: str) -> FileResponse:
+        candidate = FRONTEND_DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(FRONTEND_DIST / "index.html")
