@@ -28,7 +28,7 @@ def test_unhandled_exception_returns_generic_json_not_a_stack_trace():
 
     assert response.status_code == 500
     body = response.json()
-    assert body == {"detail": "Internal server error"}
+    assert body == {"detail": "Internal server error", "code": "INTERNAL_ERROR"}
     # The real exception message/type must never reach the client.
     assert "boom" not in response.text
     assert "RuntimeError" not in response.text

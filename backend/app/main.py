@@ -11,6 +11,7 @@ from slowapi.errors import RateLimitExceeded
 from backend.app.api.backtests import router as backtests_router
 from backend.app.api.funds import router as funds_router
 from backend.app.core.config import settings
+from backend.app.core.errors import AppHTTPException, app_http_exception_handler
 from backend.app.core.limiter import limiter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
@@ -30,7 +31,10 @@ async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONR
     # Log the real exception server-side; never let its message or type reach
     # the client (it could reveal internal file paths, stack frames, or data).
     logger.exception("Unhandled error on %s", request.url.path)
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    return JSONResponse(status_code=500, content={"detail": "Internal server error", "code": "INTERNAL_ERROR"})
+
+
+app.add_exception_handler(AppHTTPException, app_http_exception_handler)
 _allowed_origins = settings.allowed_origins_list()
 app.add_middleware(
     CORSMiddleware,

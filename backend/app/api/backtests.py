@@ -8,11 +8,13 @@ from typing import Any
 from uuid import uuid4
 
 import pandas as pd
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Request
 from fastapi.responses import PlainTextResponse
 
+from backend.app.core.errors import AppHTTPException
 from backend.app.core.limiter import limiter
 from backend.app.data.quality import align_nav_panel, validate_nav_panel
+from backend.app.domain.enums import ErrorCode
 from backend.app.domain.schemas import BacktestRequest
 from backend.app.engine.backtest import run_backtest
 from backend.app.reports.artifacts import write_research_report
@@ -39,12 +41,20 @@ def create_backtest(request: Request, backtest_request: BacktestRequest) -> dict
     )
     try:
         if backtest_request.data.source != "sec_open_data":
-            raise HTTPException(status_code=400, detail="Production backtests only support SEC Open Data.")
+            raise AppHTTPException(
+                status_code=400,
+                detail="Production backtests only support SEC Open Data.",
+                code=ErrorCode.UNSUPPORTED_DATA_SOURCE,
+            )
 
         try:
             nav = align_nav_panel(load_nav_panel(proj_ids), frequency=backtest_request.data.frequency)
         except FileNotFoundError as exc:
-            raise HTTPException(status_code=503, detail="SEC NAV cache is missing. Run scripts/sec_download_mvp.py.") from exc
+            raise AppHTTPException(
+                status_code=503,
+                detail="SEC NAV cache is missing. Run scripts/sec_download_mvp.py.",
+                code=ErrorCode.NAV_CACHE_MISSING,
+            ) from exc
 
         selected_nav = nav.loc[pd.Timestamp(backtest_request.start_date) : pd.Timestamp(backtest_request.end_date), proj_ids]
         quality_issues = validate_nav_panel(
@@ -55,7 +65,9 @@ def create_backtest(request: Request, backtest_request: BacktestRequest) -> dict
         try:
             result = run_backtest(backtest_request, nav)
         except ValueError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
+            raise AppHTTPException(
+                status_code=422, detail=str(exc), code=ErrorCode.INSUFFICIENT_NAV_HISTORY
+            ) from exc
 
         result["quality_issues"] = quality_issues
         result["run_id"] = make_run_id()
@@ -84,7 +96,9 @@ def get_backtest_report(run_id: str) -> str:
     try:
         report_path = write_research_report(run_id)
     except FileNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=f"Backtest run not found: {run_id}") from exc
+        raise AppHTTPException(
+            status_code=404, detail=f"Backtest run not found: {run_id}", code=ErrorCode.RUN_NOT_FOUND
+        ) from exc
     return report_path.read_text(encoding="utf-8")
 
 
