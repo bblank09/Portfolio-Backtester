@@ -107,14 +107,6 @@ export function BacktestWorkspace() {
         </button>
       </header>
 
-      <div className="banner disclaimer">
-        <span className="ic">&#9888;</span>
-        <span>
-          เครื่องมือนี้ใช้ backtest ข้อมูลย้อนหลังเท่านั้น ไม่ใช่คำแนะนำการลงทุน ไม่รับประกันผลตอบแทนในอนาคต
-          และ universe ปัจจุบันยังไม่ยืนยัน survivorship-bias-free (ดูรายละเอียดในแท็บ Report)
-        </span>
-      </div>
-
       <div className="main">
         <PortfolioStep
           active={currentStep === 0}

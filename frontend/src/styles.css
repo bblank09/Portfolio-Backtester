@@ -159,7 +159,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 *::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: var(--r-pill); border: 2px solid transparent; background-clip: padding-box; }
 
 /* ---------- Shell / top bar ---------- */
-.shell { display: grid; grid-template-rows: auto auto 1fr; min-height: 100vh; }
+.shell { display: grid; grid-template-rows: auto 1fr; min-height: 100vh; }
 
 .topbar {
   display: flex;
@@ -390,7 +390,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 .banner { display: flex; gap: 10px; align-items: flex-start; border-radius: var(--r-md); padding: 12px 14px; font-size: 13px; border: 1px solid var(--warn-soft-border); background: var(--warn-soft); color: var(--warn); }
 .banner .ic { flex: none; margin-top: 1px; }
-.banner.disclaimer { border-radius: 0; margin: 0; }
 
 .footnote { font-size: 11.5px; color: var(--text-tertiary); margin-top: 6px; }
 
