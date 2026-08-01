@@ -943,17 +943,22 @@ function assumptionRows(result: BacktestResult) {
 
 function keyMetricRows(result: BacktestResult) {
   const m = result.summary;
+  // The annualization factor depends on the run's own NAV alignment frequency
+  // -- daily mode uses sqrt(252), not sqrt(12) -- so the formula text shown
+  // must match how *this* run's numbers were actually computed.
+  const periodsPerYear = result.request.data.frequency === "daily" ? 252 : 12;
+  const periodLabel = result.request.data.frequency === "daily" ? "daily" : "monthly";
   return [
     { metric: "Ending value", value: money.format(m.ending_value), formula: "Portfolio value after returns, cashflows, costs, and rebalancing" },
     { metric: "TWRR", value: pct.format(m.twrr), formula: "Product of linked sub-period returns minus 1" },
     { metric: "TWRR CAGR", value: pct.format(m.twrr_cagr), formula: "(1 + TWRR)^(1/years) - 1" },
     { metric: "IRR (money-weighted)", value: formatPercentLike(m.irr), formula: "Solve for r where sum(cashflow_i / (1+r)^year_i) = 0; diverges from CAGR when flow timing matters" },
-    { metric: "Volatility", value: pct.format(m.volatility), formula: "Std(monthly returns) * sqrt(12)" },
+    { metric: "Volatility", value: pct.format(m.volatility), formula: `Std(${periodLabel} returns) * sqrt(${periodsPerYear})` },
     { metric: "Sharpe ratio", value: formatNumber(m.sharpe), formula: "Annualized excess return / annualized volatility" },
     { metric: "Sortino ratio", value: formatNumber(m.sortino), formula: "Annualized excess return / downside deviation (penalises losses only)" },
     { metric: "Calmar ratio", value: formatNumber(m.calmar), formula: "Annualized return / absolute maximum drawdown" },
-    { metric: "Value at Risk (95%)", value: formatPercentLike(m.var_95), formula: "Historical 5th percentile monthly loss (non-parametric)" },
-    { metric: "Value at Risk (99%)", value: formatPercentLike(m.var_99), formula: "Historical 1st percentile monthly loss (non-parametric)" },
+    { metric: "Value at Risk (95%)", value: formatPercentLike(m.var_95), formula: `Historical 5th percentile ${periodLabel} loss (non-parametric)` },
+    { metric: "Value at Risk (99%)", value: formatPercentLike(m.var_99), formula: `Historical 1st percentile ${periodLabel} loss (non-parametric)` },
     { metric: "Maximum drawdown", value: pct.format(m.max_drawdown), formula: "Value / running peak - 1" },
     { metric: "Benchmark excess return", value: formatPercentLike(m.benchmark_excess_return), formula: "Cumulative portfolio TWRR - cumulative benchmark return over matched periods" },
     { metric: "Total contributed", value: money.format(m.total_contributed), formula: "Initial capital + sum of applied positive cashflows" },
@@ -1003,17 +1008,17 @@ function formulaReferenceRows() {
     { metric: "Time-weighted return (TWRR)", formula: "TWRR = Prod(1 + r_t) - 1, cashflow periods excluded from r_t", source: "GIPS Standards (CFA Institute)" },
     { metric: "TWRR CAGR", formula: "(1 + TWRR)^(1/years) - 1", source: "Standard annualization" },
     { metric: "IRR (money-weighted)", formula: "Solve for r: sum(cashflow_i / (1+r)^year_i) = 0, investor-perspective flows at nominal elapsed years", source: "GIPS Standards (CFA Institute)" },
-    { metric: "Annualized volatility", formula: "Std(monthly returns, sample, ddof=1) * sqrt(12)", source: "Standard sample statistics" },
+    { metric: "Annualized volatility", formula: "Std(period returns, sample, ddof=1) * sqrt(m); m = 12 (monthly) or 252 (daily)", source: "Standard sample statistics" },
     { metric: "Sharpe ratio", formula: "(Annualized return - risk-free rate) / annualized volatility", source: "Sharpe (1966, 1994)" },
     { metric: "Sortino ratio", formula: "(Annualized return - risk-free rate) / downside deviation (losses only)", source: "Sortino & Price (1994)" },
     { metric: "Calmar ratio", formula: "Annualized return / |maximum drawdown|", source: "Young (1991)" },
-    { metric: "Value at Risk (historical)", formula: "max(0, -percentile(monthly returns, (1 - confidence) * 100))", source: "Jorion; CFA Institute" },
+    { metric: "Value at Risk (historical)", formula: "max(0, -percentile(period returns, (1 - confidence) * 100))", source: "Jorion; CFA Institute" },
     { metric: "Maximum drawdown", formula: "min(Value_t / running_peak_t - 1)", source: "Magdon-Ismail & Atiya" },
     { metric: "Beta", formula: "Cov(portfolio, benchmark) / Var(benchmark), sample", source: "Sharpe (1964); Lintner (1965)" },
     { metric: "Alpha (CAPM residual)", formula: "portfolio CAGR - (risk-free + beta * (benchmark CAGR - risk-free))", source: "Sharpe (1964); Lintner (1965)" },
-    { metric: "Tracking error", formula: "Std(portfolio_return - benchmark_return, sample, ddof=1) * sqrt(12)", source: "CFA Institute (Kidd, 2012)" },
+    { metric: "Tracking error", formula: "Std(portfolio_return - benchmark_return, sample, ddof=1) * sqrt(m); m = 12 (monthly) or 252 (daily)", source: "CFA Institute (Kidd, 2012)" },
     { metric: "Information ratio", formula: "(portfolio CAGR - benchmark CAGR) / tracking error", source: "CFA Institute (Kidd, 2012)" },
-    { metric: "Correlation", formula: "Pearson correlation of aligned monthly returns", source: "Markowitz (1952)" },
+    { metric: "Correlation", formula: "Pearson correlation of aligned period returns", source: "Markowitz (1952)" },
     { metric: "Rebalance turnover", formula: "sum(|target_value_i - current_value_i|) / 2 / portfolio_value, one-way fraction", source: "Standard bookkeeping" },
     { metric: "Rebalance cost", formula: "money turnover * (transaction_bps + slippage_bps) / 10,000", source: "Standard bookkeeping" }
   ];

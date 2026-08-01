@@ -1,6 +1,6 @@
 # Formula Reference
 
-This project computes production outputs from cached SEC Open Data NAV observations. The current production frequency is month-end, so `m = 12` periods per year unless the engine configuration changes.
+This project computes production outputs from cached SEC Open Data NAV observations. The NAV alignment frequency is a user-selectable input (`data.frequency`): month-end (`m = 12`, the default) or daily business days (`m = 252`). Every formula below that references `m` uses whichever value the run was actually configured with — the walkthroughs use `m = 12` for readability, but substitute `m = 252` for a daily-mode run.
 
 ## Notation
 
@@ -127,6 +127,7 @@ Used in output:
 - Sharpe ratio numerator.
 - CAPM-style alpha calculation.
 - Information ratio numerator.
+- Asset Risk and Allocation tab: per-asset `cagr` (same function, applied to each held asset's own return series).
 
 Source: standard geometric annualization of a compounded return; not attributable to a specific paper. It is the numerator convention used throughout the GIPS-referenced return calculations above.
 
@@ -147,6 +148,7 @@ Used in output:
 
 - Summary: `Volatility`.
 - Sharpe ratio denominator.
+- Asset Risk and Allocation tab: per-asset `volatility` (same function, applied to each held asset's own return series).
 
 Related ratio:
 
