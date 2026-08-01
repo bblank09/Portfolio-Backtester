@@ -999,23 +999,23 @@ function stressRows(result: BacktestResult) {
 
 function formulaReferenceRows() {
   return [
-    { metric: "Simple return", formula: "r_t = NAV_t / NAV_(t-1) - 1" },
-    { metric: "Time-weighted return (TWRR)", formula: "TWRR = Prod(1 + r_t) - 1, cashflow periods excluded from r_t" },
-    { metric: "TWRR CAGR", formula: "(1 + TWRR)^(1/years) - 1" },
-    { metric: "IRR (money-weighted)", formula: "Solve for r: sum(cashflow_i / (1+r)^year_i) = 0, investor-perspective flows at nominal elapsed years" },
-    { metric: "Annualized volatility", formula: "Std(monthly returns, sample, ddof=1) * sqrt(12)" },
-    { metric: "Sharpe ratio", formula: "(Annualized return - risk-free rate) / annualized volatility" },
-    { metric: "Sortino ratio", formula: "(Annualized return - risk-free rate) / downside deviation (losses only)" },
-    { metric: "Calmar ratio", formula: "Annualized return / |maximum drawdown|" },
-    { metric: "Value at Risk (historical)", formula: "max(0, -percentile(monthly returns, (1 - confidence) * 100))" },
-    { metric: "Maximum drawdown", formula: "min(Value_t / running_peak_t - 1)" },
-    { metric: "Beta", formula: "Cov(portfolio, benchmark) / Var(benchmark), sample" },
-    { metric: "Alpha (CAPM residual)", formula: "portfolio CAGR - (risk-free + beta * (benchmark CAGR - risk-free))" },
-    { metric: "Tracking error", formula: "Std(portfolio_return - benchmark_return, sample, ddof=1) * sqrt(12)" },
-    { metric: "Information ratio", formula: "(portfolio CAGR - benchmark CAGR) / tracking error" },
-    { metric: "Correlation", formula: "Pearson correlation of aligned monthly returns" },
-    { metric: "Rebalance turnover", formula: "sum(|target_value_i - current_value_i|) / 2 / portfolio_value, one-way fraction" },
-    { metric: "Rebalance cost", formula: "money turnover * (transaction_bps + slippage_bps) / 10,000" }
+    { metric: "Simple return", formula: "r_t = NAV_t / NAV_(t-1) - 1", source: "Standard arithmetic" },
+    { metric: "Time-weighted return (TWRR)", formula: "TWRR = Prod(1 + r_t) - 1, cashflow periods excluded from r_t", source: "GIPS Standards (CFA Institute)" },
+    { metric: "TWRR CAGR", formula: "(1 + TWRR)^(1/years) - 1", source: "Standard annualization" },
+    { metric: "IRR (money-weighted)", formula: "Solve for r: sum(cashflow_i / (1+r)^year_i) = 0, investor-perspective flows at nominal elapsed years", source: "GIPS Standards (CFA Institute)" },
+    { metric: "Annualized volatility", formula: "Std(monthly returns, sample, ddof=1) * sqrt(12)", source: "Standard sample statistics" },
+    { metric: "Sharpe ratio", formula: "(Annualized return - risk-free rate) / annualized volatility", source: "Sharpe (1966, 1994)" },
+    { metric: "Sortino ratio", formula: "(Annualized return - risk-free rate) / downside deviation (losses only)", source: "Sortino & Price (1994)" },
+    { metric: "Calmar ratio", formula: "Annualized return / |maximum drawdown|", source: "Young (1991)" },
+    { metric: "Value at Risk (historical)", formula: "max(0, -percentile(monthly returns, (1 - confidence) * 100))", source: "Jorion; CFA Institute" },
+    { metric: "Maximum drawdown", formula: "min(Value_t / running_peak_t - 1)", source: "Magdon-Ismail & Atiya" },
+    { metric: "Beta", formula: "Cov(portfolio, benchmark) / Var(benchmark), sample", source: "Sharpe (1964); Lintner (1965)" },
+    { metric: "Alpha (CAPM residual)", formula: "portfolio CAGR - (risk-free + beta * (benchmark CAGR - risk-free))", source: "Sharpe (1964); Lintner (1965)" },
+    { metric: "Tracking error", formula: "Std(portfolio_return - benchmark_return, sample, ddof=1) * sqrt(12)", source: "CFA Institute (Kidd, 2012)" },
+    { metric: "Information ratio", formula: "(portfolio CAGR - benchmark CAGR) / tracking error", source: "CFA Institute (Kidd, 2012)" },
+    { metric: "Correlation", formula: "Pearson correlation of aligned monthly returns", source: "Markowitz (1952)" },
+    { metric: "Rebalance turnover", formula: "sum(|target_value_i - current_value_i|) / 2 / portfolio_value, one-way fraction", source: "Standard bookkeeping" },
+    { metric: "Rebalance cost", formula: "money turnover * (transaction_bps + slippage_bps) / 10,000", source: "Standard bookkeeping" }
   ];
 }
 
