@@ -8,6 +8,7 @@ from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
+from backend.app.api.admin import router as admin_router
 from backend.app.api.backtests import router as backtests_router
 from backend.app.api.funds import router as funds_router
 from backend.app.core.config import settings
@@ -48,11 +49,13 @@ app.add_middleware(
 )
 app.include_router(funds_router, prefix="/api/v1")
 app.include_router(backtests_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
 # Unversioned alias kept during the migration window -- the current frontend
 # (and every existing client) still calls these paths directly. Drop this
 # once all clients are confirmed to be on /api/v1.
 app.include_router(funds_router, prefix="/api")
 app.include_router(backtests_router, prefix="/api")
+app.include_router(admin_router, prefix="/api")
 
 
 @app.get("/api/health")

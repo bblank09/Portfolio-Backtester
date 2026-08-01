@@ -15,6 +15,10 @@ class Settings(BaseSettings):
     # steal, and it means a deployer who never touches this env var still
     # gets a working app instead of a same-origin-only failure out of the box.
     allowed_origins: str = "*"
+    # Empty by default -- with no token configured, the export endpoint
+    # refuses every request (see AppHTTPException in admin.py) rather than
+    # defaulting to open or to a guessable value.
+    backup_token: str = ""
 
     def allowed_origins_list(self) -> list[str]:
         origins = [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
