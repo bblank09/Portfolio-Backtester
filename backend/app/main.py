@@ -7,12 +7,17 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.backtests import router as backtests_router
 from backend.app.api.funds import router as funds_router
+from backend.app.core.config import settings
 
 app = FastAPI(title="SEC Open Data Portfolio Backtester", version="0.1.0")
+_allowed_origins = settings.allowed_origins_list()
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
+    allow_origins=_allowed_origins,
+    # Credentials + wildcard origin is invalid per the CORS spec (browsers
+    # reject it); this API has no cookies/sessions anyway, so only allow
+    # credentials when the deployer has configured specific origins.
+    allow_credentials=_allowed_origins != ["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
