@@ -1,15 +1,29 @@
+import logging
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.app.api.backtests import router as backtests_router
 from backend.app.api.funds import router as funds_router
 from backend.app.core.config import settings
 
+logger = logging.getLogger("app")
+
 app = FastAPI(title="SEC Open Data Portfolio Backtester", version="0.1.0")
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    # Starlette's own default for an uncaught exception returns a plain-text
+    # body, not JSON -- any client code (including our own frontend) that
+    # calls response.json() on an error would itself crash trying to parse it.
+    # Log the real exception server-side; never let its message or type reach
+    # the client (it could reveal internal file paths, stack frames, or data).
+    logger.exception("Unhandled error on %s", request.url.path)
+    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
 _allowed_origins = settings.allowed_origins_list()
 app.add_middleware(
     CORSMiddleware,
