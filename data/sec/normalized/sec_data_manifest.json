@@ -3,12 +3,13 @@
   "endpoint": "/v2/fund/daily-info/nav",
   "start": "2015-01-01",
   "end": "2026-08-02",
-  "raw_dir": "data/sec/raw/daily_nav/20260802_092807",
-  "fund_count": 12,
-  "nav_rows": 29773,
-  "request_count": 305,
+  "raw_dir": "data/sec/raw/daily_nav/20260802_103615",
+  "fund_count": 800,
+  "nav_rows": 1013082,
+  "request_count": 15183,
   "status_counts": {
-    "success": 305
+    "success": 15183
   },
+  "skipped_invalid_nav_rows": 6,
   "valid_for_backtest": true
 }
