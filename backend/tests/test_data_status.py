@@ -27,6 +27,22 @@ def test_data_status_returns_the_manifest_nav_as_of_date():
     assert body["fund_count"] == manifest["fund_count"]
 
 
+def test_data_status_returns_the_manifest_nav_start_date():
+    # The frontend uses this to bound the date-range picker so a user can't
+    # pick a start date before any NAV data exists -- must reflect the real
+    # manifest, not a hardcoded value.
+    client = TestClient(app)
+
+    response = client.get("/api/data-status")
+
+    assert response.status_code == 200
+    body = response.json()
+    import json
+
+    manifest = json.loads(Path("data/sec/normalized/sec_data_manifest.json").read_text())
+    assert body["nav_start"] == manifest["start"]
+
+
 def test_data_status_returns_503_when_manifest_is_missing():
     client = TestClient(app)
     with patch.object(data_status_module, "MANIFEST_PATH", Path("data/sec/normalized/does_not_exist.json")):

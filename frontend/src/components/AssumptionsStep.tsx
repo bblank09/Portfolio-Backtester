@@ -6,7 +6,10 @@ interface Props {
   active: boolean;
   request: BacktestRequest;
   funds: SecFund[];
+  fieldErrors: Record<string, string>;
   validationErrors: string[];
+  navStart: string | null;
+  navAsOf: string | null;
   error: string;
   loading: boolean;
   onChange: (request: BacktestRequest) => void;
@@ -14,11 +17,46 @@ interface Props {
   onRun: () => void;
 }
 
-export function AssumptionsStep({ active, request, funds, validationErrors, error, loading, onChange, onBack, onRun }: Props) {
+const RANGE_PRESETS: Array<{ label: string; years: number | "max" }> = [
+  { label: "1Y", years: 1 },
+  { label: "3Y", years: 3 },
+  { label: "5Y", years: 5 },
+  { label: "Max", years: "max" }
+];
+
+export function AssumptionsStep({
+  active,
+  request,
+  funds,
+  fieldErrors,
+  validationErrors,
+  navStart,
+  navAsOf,
+  error,
+  loading,
+  onChange,
+  onBack,
+  onRun
+}: Props) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
   const showCashflow = request.cashflow.enabled;
   const cashflowLabel = request.cashflow.type === "withdrawal" ? "Withdrawal amount" : "Contribution amount";
   const canRun = validationErrors.length === 0 && !loading;
+
+  function markTouched(field: string) {
+    setTouched((current) => ({ ...current, [field]: true }));
+  }
+
+  function fieldError(field: string): string | null {
+    return touched[field] ? (fieldErrors[field] ?? null) : null;
+  }
+
+  function applyRangePreset(years: number | "max") {
+    const end = navAsOf ?? request.end_date;
+    const start = years === "max" ? (navStart ?? request.start_date) : shiftYears(end, -years);
+    onChange({ ...request, start_date: navStart && start < navStart ? navStart : start, end_date: end });
+  }
 
   return (
     <div className={active ? "page active" : "page"}>
@@ -29,26 +67,74 @@ export function AssumptionsStep({ active, request, funds, validationErrors, erro
 
       <div className="card">
         <div className="section-title">Date range &amp; capital</div>
+        <div className="range-presets">
+          {RANGE_PRESETS.map((preset) => (
+            <button
+              className="btn btn-chip"
+              key={preset.label}
+              onClick={() => applyRangePreset(preset.years)}
+              type="button"
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
         <div className="form-grid">
           <div className="form-field">
             <label htmlFor="startDate">Start date</label>
-            <input className="field" id="startDate" type="date" value={request.start_date} onChange={(event) => onChange({ ...request, start_date: event.target.value })} />
+            <input
+              className="field"
+              id="startDate"
+              max={navAsOf ?? undefined}
+              min={navStart ?? undefined}
+              onBlur={() => markTouched("startDate")}
+              onChange={(event) => onChange({ ...request, start_date: event.target.value })}
+              type="date"
+              value={request.start_date}
+            />
+            {fieldError("startDate") ? <div className="field-error">{fieldError("startDate")}</div> : null}
           </div>
           <div className="form-field">
             <label htmlFor="endDate">End date</label>
-            <input className="field" id="endDate" type="date" value={request.end_date} onChange={(event) => onChange({ ...request, end_date: event.target.value })} />
+            <input
+              className="field"
+              id="endDate"
+              max={navAsOf ?? undefined}
+              min={navStart ?? undefined}
+              onBlur={() => markTouched("endDate")}
+              onChange={(event) => onChange({ ...request, end_date: event.target.value })}
+              type="date"
+              value={request.end_date}
+            />
+            {fieldError("endDate") ? <div className="field-error">{fieldError("endDate")}</div> : null}
           </div>
           <div className="form-field">
             <label htmlFor="initialCapital">Initial capital</label>
-            <input className="field num" id="initialCapital" min={1} type="number" value={request.initial_capital} onChange={(event) => onChange({ ...request, initial_capital: Number(event.target.value) })} />
+            <input
+              className="field num"
+              id="initialCapital"
+              min={1}
+              onBlur={() => markTouched("initialCapital")}
+              onChange={(event) => onChange({ ...request, initial_capital: Number(event.target.value) })}
+              type="number"
+              value={request.initial_capital}
+            />
+            {fieldError("initialCapital") ? <div className="field-error">{fieldError("initialCapital")}</div> : null}
           </div>
           <div className="form-field">
             <label htmlFor="benchmark">Benchmark</label>
-            <select className="field" id="benchmark" value={request.benchmark_proj_id} onChange={(event) => onChange({ ...request, benchmark_proj_id: event.target.value })}>
+            <select
+              className="field"
+              id="benchmark"
+              onBlur={() => markTouched("benchmark")}
+              onChange={(event) => onChange({ ...request, benchmark_proj_id: event.target.value })}
+              value={request.benchmark_proj_id}
+            >
               {funds.map((fund) => (
                 <option key={`${fund.proj_id}-${fund.fund_class_name}`} value={fund.proj_id}>{fund.display_name}</option>
               ))}
             </select>
+            {fieldError("benchmark") ? <div className="field-error">{fieldError("benchmark")}</div> : null}
           </div>
         </div>
 
@@ -86,10 +172,12 @@ export function AssumptionsStep({ active, request, funds, validationErrors, erro
               disabled={!showCashflow}
               id="cashflowAmount"
               min={0}
+              onBlur={() => markTouched("cashflowAmount")}
               type="number"
               value={request.cashflow.amount}
               onChange={(event) => onChange({ ...request, cashflow: { ...request.cashflow, amount: Number(event.target.value) } })}
             />
+            {fieldError("cashflowAmount") ? <div className="field-error">{fieldError("cashflowAmount")}</div> : null}
           </div>
           <div className="form-field">
             <label htmlFor="cashflowFrequency">Frequency</label>
@@ -140,6 +228,7 @@ export function AssumptionsStep({ active, request, funds, validationErrors, erro
           {request.rebalancing.mode === "threshold" ? (
             <div className="form-field">
               <label htmlFor="rebalanceThreshold">Drift band (%)</label>
+              <p className="field-hint">Rebalances only when a holding drifts this many percentage points away from its target weight.</p>
               <input
                 className="field num"
                 id="rebalanceThreshold"
@@ -176,17 +265,17 @@ export function AssumptionsStep({ active, request, funds, validationErrors, erro
             </div>
             <div className="form-field">
               <label htmlFor="transactionCost">Transaction cost (bps)</label>
+              <p className="field-hint">1 bp = 0.01%. Charged on the dollar value of each trade made during rebalancing.</p>
               <input className="field num" id="transactionCost" min={0} type="number" value={request.costs.transaction_bps} onChange={(event) => onChange({ ...request, costs: { ...request.costs, transaction_bps: Number(event.target.value) } })} />
             </div>
             <div className="form-field">
               <label htmlFor="slippage">Slippage (bps)</label>
+              <p className="field-hint">1 bp = 0.01%. Extra cost from the price moving between decision and execution.</p>
               <input className="field num" id="slippage" min={0} type="number" value={request.costs.slippage_bps} onChange={(event) => onChange({ ...request, costs: { ...request.costs, slippage_bps: Number(event.target.value) } })} />
             </div>
             <div className="form-field">
-              <label htmlFor="priceBasis">Price basis</label>
-              <select className="field" disabled id="priceBasis" value="sec_nav">
-                <option value="sec_nav">SEC NAV per unit</option>
-              </select>
+              <label>Price basis</label>
+              <p className="field-static">SEC NAV per unit</p>
             </div>
             <div className="form-field">
               <label htmlFor="dataFrequency">NAV granularity</label>
@@ -201,10 +290,8 @@ export function AssumptionsStep({ active, request, funds, validationErrors, erro
               </select>
             </div>
             <div className="form-field">
-              <label htmlFor="dividendTreatment">Dividend treatment</label>
-              <select className="field" disabled id="dividendTreatment" value="fund_nav">
-                <option value="fund_nav">Reflected through fund NAV only</option>
-              </select>
+              <label>Dividend treatment</label>
+              <p className="field-static">Reflected through fund NAV only</p>
             </div>
           </div>
         </div>
@@ -241,4 +328,11 @@ export function AssumptionsStep({ active, request, funds, validationErrors, erro
       </div>
     </div>
   );
+}
+
+function shiftYears(isoDate: string, deltaYears: number): string {
+  const date = new Date(`${isoDate}T00:00:00Z`);
+  if (Number.isNaN(date.getTime())) return isoDate;
+  date.setUTCFullYear(date.getUTCFullYear() + deltaYears);
+  return date.toISOString().slice(0, 10);
 }

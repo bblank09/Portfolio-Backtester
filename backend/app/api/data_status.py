@@ -22,5 +22,6 @@ def get_data_status() -> dict:
     return {
         "data_source": "sec_open_data",
         "nav_as_of": manifest["end"],
+        "nav_start": manifest["start"],
         "fund_count": manifest["fund_count"],
     }

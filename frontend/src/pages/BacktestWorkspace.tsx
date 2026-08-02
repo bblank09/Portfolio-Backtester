@@ -23,6 +23,7 @@ const initialRequest: BacktestRequest = {
 export function BacktestWorkspace() {
   const [funds, setFunds] = useState<SecFund[]>([]);
   const [navAsOf, setNavAsOf] = useState<string | null>(null);
+  const [navStart, setNavStart] = useState<string | null>(null);
   const [request, setRequest] = useState<BacktestRequest>(initialRequest);
   const [result, setResult] = useState<BacktestResult | null>(null);
   const [error, setError] = useState("");
@@ -48,8 +49,14 @@ export function BacktestWorkspace() {
     // using the app, so failures here are silently ignored rather than
     // surfaced as a page-level error.
     fetchDataStatus()
-      .then((status) => setNavAsOf(status.nav_as_of))
-      .catch(() => setNavAsOf(null));
+      .then((status) => {
+        setNavAsOf(status.nav_as_of);
+        setNavStart(status.nav_start);
+      })
+      .catch(() => {
+        setNavAsOf(null);
+        setNavStart(null);
+      });
   }, []);
 
   useEffect(() => {
@@ -87,7 +94,8 @@ export function BacktestWorkspace() {
   }, []);
 
   const totalWeight = request.assets.reduce((sum, asset) => sum + asset.weight, 0);
-  const validationErrors = validateRequest(request, totalWeight);
+  const fieldErrors = validateRequest(request, totalWeight);
+  const validationErrors = Object.values(fieldErrors);
 
   function updateRequest(next: BacktestRequest | ((current: BacktestRequest) => BacktestRequest)) {
     setResult(null);
@@ -184,7 +192,10 @@ export function BacktestWorkspace() {
           active={currentStep === 1}
           request={request}
           funds={funds}
+          fieldErrors={fieldErrors}
           validationErrors={validationErrors}
+          navStart={navStart}
+          navAsOf={navAsOf}
           error={error}
           loading={loading}
           onChange={updateRequest}
@@ -224,15 +235,17 @@ function formatNavDate(isoDate: string): string {
   return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-function validateRequest(request: BacktestRequest, totalWeight: number) {
-  const errors: string[] = [];
-  if (!request.assets.length) errors.push("Add at least one SEC fund.");
-  if (Math.abs(totalWeight - 100) > 0.01) errors.push(`Weights sum to ${totalWeight.toFixed(1)}%, not 100%.`);
-  if (!request.benchmark_proj_id) errors.push("Select a benchmark SEC fund.");
-  if (new Date(request.start_date) >= new Date(request.end_date)) errors.push("Start date must be before end date.");
-  if (!(request.initial_capital > 0)) errors.push("Initial capital must be greater than zero.");
+function validateRequest(request: BacktestRequest, totalWeight: number): Record<string, string> {
+  const errors: Record<string, string> = {};
+  if (!request.assets.length) errors.assets = "Add at least one SEC fund.";
+  if (Math.abs(totalWeight - 100) > 0.01) errors.assets = `Weights sum to ${totalWeight.toFixed(1)}%, not 100%.`;
+  if (!request.benchmark_proj_id) errors.benchmark = "Select a benchmark SEC fund.";
+  if (new Date(request.start_date) >= new Date(request.end_date)) {
+    errors.endDate = "Start date must be before end date.";
+  }
+  if (!(request.initial_capital > 0)) errors.initialCapital = "Initial capital must be greater than zero.";
   if (request.cashflow.enabled && !(request.cashflow.amount > 0)) {
-    errors.push("Cashflow amount must be greater than zero when cashflow is enabled.");
+    errors.cashflowAmount = "Cashflow amount must be greater than zero when cashflow is enabled.";
   }
   return errors;
 }

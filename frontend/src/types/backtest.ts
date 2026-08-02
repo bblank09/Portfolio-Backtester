@@ -11,6 +11,7 @@ export interface SecFundAllocation {
 
 export interface DataStatus {
   nav_as_of: string;
+  nav_start: string;
   fund_count: number;
 }
 
