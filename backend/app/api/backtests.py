@@ -91,6 +91,25 @@ def create_backtest(request: Request, backtest_request: BacktestRequest) -> dict
     return to_jsonable(result)
 
 
+@router.get("/{run_id}")
+def get_backtest(run_id: str) -> dict[str, Any]:
+    # run_id is used to build a filesystem path -- reject anything that could
+    # escape RUNS_DIR (path separators, ".."), rather than trusting a value
+    # that arrives from a public URL query param.
+    if run_id != Path(run_id).name or run_id in ("", ".", ".."):
+        raise AppHTTPException(status_code=404, detail=f"Backtest run not found: {run_id}", code=ErrorCode.RUN_NOT_FOUND)
+
+    run_dir = RUNS_DIR / run_id
+    result_path = run_dir / "result.json"
+    if not result_path.is_file():
+        raise AppHTTPException(status_code=404, detail=f"Backtest run not found: {run_id}", code=ErrorCode.RUN_NOT_FOUND)
+
+    result = json.loads(result_path.read_text(encoding="utf-8"))
+    request_path = run_dir / "request.json"
+    result["request"] = json.loads(request_path.read_text(encoding="utf-8")) if request_path.is_file() else None
+    return result
+
+
 @router.get("/{run_id}/report", response_class=PlainTextResponse)
 def get_backtest_report(run_id: str) -> str:
     try:

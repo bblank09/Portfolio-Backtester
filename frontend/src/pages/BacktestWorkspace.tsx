@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { fetchDataStatus, fetchFunds, runBacktest } from "../api/client";
+import { fetchBacktestByRunId, fetchDataStatus, fetchFunds, runBacktest } from "../api/client";
 import { AssumptionsStep } from "../components/AssumptionsStep";
 import { PortfolioStep } from "../components/PortfolioStep";
 import { RunOverlay } from "../components/RunOverlay";
@@ -29,6 +29,7 @@ export function BacktestWorkspace() {
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState(0);
   const [unlockedStep, setUnlockedStep] = useState(0);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [theme, setTheme] = useState<"light" | "dark">(() => (localStorage.getItem("pb-theme") === "dark" ? "dark" : "light"));
 
   useEffect(() => {
@@ -49,6 +50,23 @@ export function BacktestWorkspace() {
     fetchDataStatus()
       .then((status) => setNavAsOf(status.nav_as_of))
       .catch(() => setNavAsOf(null));
+  }, []);
+
+  useEffect(() => {
+    // A shared link carries ?run=<run_id> -- reload that exact persisted
+    // run (both the inputs and the result) so opening the link reproduces
+    // what was shared, without re-running the backtest.
+    const runId = new URLSearchParams(window.location.search).get("run");
+    if (!runId) return;
+    setLoading(true);
+    fetchBacktestByRunId(runId)
+      .then((response) => {
+        setRequest(response.request);
+        setResult(response);
+        advanceTo(2);
+      })
+      .catch((caught: Error) => setError(`Could not load shared run "${runId}": ${caught.message}`))
+      .finally(() => setLoading(false));
   }, []);
 
   const totalWeight = request.assets.reduce((sum, asset) => sum + asset.weight, 0);
@@ -87,6 +105,12 @@ export function BacktestWorkspace() {
     try {
       const response = await runBacktest(request);
       setResult(response);
+      // Reflect the run in the URL so copying the address bar shares this
+      // exact result -- replaceState (not push) so "back" doesn't just
+      // toggle the query string.
+      const url = new URL(window.location.href);
+      url.searchParams.set("run", response.run_id);
+      window.history.replaceState(null, "", url);
       advanceTo(2);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Backtest failed");
@@ -101,6 +125,20 @@ export function BacktestWorkspace() {
     setError("");
     setUnlockedStep(0);
     goToStep(0);
+    const url = new URL(window.location.href);
+    url.searchParams.delete("run");
+    window.history.replaceState(null, "", url);
+  }
+
+  async function copyShareLink() {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setLinkCopied(true);
+      window.setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      // Clipboard access can be denied by the browser -- fail silently,
+      // the URL is still visible and copyable from the address bar.
+    }
   }
 
   return (
@@ -141,6 +179,11 @@ export function BacktestWorkspace() {
           <div className="actions">
             <button className="btn btn-ghost" onClick={() => goToStep(1)} type="button">&larr; Adjust assumptions</button>
             <button className="btn btn-ghost" onClick={startOver} type="button">Start a new portfolio</button>
+            {result ? (
+              <button className="btn btn-ghost" onClick={copyShareLink} type="button">
+                {linkCopied ? "Link copied" : "Copy shareable link"}
+              </button>
+            ) : null}
           </div>
         </div>
       </div>

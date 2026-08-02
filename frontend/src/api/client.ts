@@ -47,6 +47,10 @@ export async function fetchDataStatus(): Promise<DataStatus> {
   return requestJson<DataStatus>("/api/data-status");
 }
 
+export async function fetchBacktestByRunId(runId: string): Promise<BacktestResult> {
+  return requestJson<BacktestResult>(`/api/backtests/${encodeURIComponent(runId)}`);
+}
+
 export async function runBacktest(payload: BacktestRequest): Promise<BacktestResult> {
   const result = await requestJson<Omit<BacktestResult, "request">>("/api/backtests", {
     method: "POST",
