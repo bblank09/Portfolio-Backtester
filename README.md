@@ -31,10 +31,11 @@ Built by [**Supachok Julaupay**](https://github.com/bblank09) &middot; [github.c
 9. [Project Structure](#9-project-structure)
 10. [Testing & Validation](#10-testing--validation)
 11. [Example Output](#11-example-output)
-12. [Limitations & Known Issues](#12-limitations--known-issues)
-13. [Roadmap](#13-roadmap)
-14. [License](#14-license)
-15. [Acknowledgments & Data Attribution](#15-acknowledgments--data-attribution)
+12. [Success Metrics](#12-success-metrics)
+13. [Limitations & Known Issues](#13-limitations--known-issues)
+14. [Roadmap](#14-roadmap)
+15. [License](#15-license)
+16. [Acknowledgments & Data Attribution](#16-acknowledgments--data-attribution)
 
 ---
 
@@ -222,13 +223,25 @@ npx playwright install chromium   # first time only
 npm run test:e2e
 ```
 
-See item 12's known flaky-test note for the one test that isn't fully stable yet.
+See [section 13](#13-limitations--known-issues)'s known flaky-test note for the one test that isn't fully stable yet.
 
 ## 11. Example Output
 
 Running a Past Performance backtest on a two-fund equal-weight portfolio (2020-01-31 to 2024-12-31, THB 100,000 initial capital) produces, among other outputs, ending value, TWRR/CAGR, annualized volatility, Sharpe ratio, maximum drawdown, and benchmark excess return — each traceable to its formula in the Report tab. See [`docs/presentation-use-cases-and-workflow.md`](docs/presentation-use-cases-and-workflow.md) for a walked-through example.
 
-## 12. Limitations & Known Issues
+## 12. Success Metrics
+
+Targets for whoever operates this app to judge "is it healthy" without needing to read code. None of these are enforced automatically yet — there is no metrics dashboard or alerting in this version, only the structured request logging already added in `backend/app/api/backtests.py` (every request logs its fund ids, duration, and success/failure). These targets exist so there's a concrete bar to check that log against, and something concrete to build a dashboard/alert against later.
+
+| Metric | Target | How to check |
+| --- | --- | --- |
+| Successful backtest runs / day | Track as a baseline once real traffic exists; no target number yet for a single-user tool with no analytics deployed | `grep "backtest request succeeded" <log file> \| grep "$(date +%Y-%m-%d)" \| wc -l` |
+| Error rate on `POST /api/backtests` | **< 1%** of requests result in a 5xx (server-side failure) or an unexpected 4xx (excludes ordinary validation errors like weights not summing to 100%, which are expected user-input feedback, not app errors) | `(count of "backtest request failed" lines) / (count of "backtest request:" lines)` per day — note the trailing colon on the denominator's pattern, since "backtest request failed"/"succeeded" both also contain the substring "backtest request" |
+| p95 response time for a normal backtest | **< 3s** for a request against the current cached universe (≤12 funds, monthly frequency, ≤10-year window) | Each request logs `duration=%.3fs`; compute the 95th percentile from the logged durations over a time window |
+
+**Measured so far** (manual/E2E testing against the current 12-fund cache, not a load test): every real request logged during this project's development consistently completed in **0.05–0.2s** — comfortably under the 3s target. This is not a substitute for measuring p95 under real concurrent traffic once deployed, since the target exists specifically to catch degradation the developer's own testing wouldn't surface — e.g. if the cached fund universe grows well beyond its current 12 funds, `pd.read_parquet()`'s full-file load (it reads the entire cache into memory before filtering to the requested funds) becomes the likely bottleneck, well before 12-fund-scale testing would ever show it.
+
+## 13. Limitations & Known Issues
 
 - **Not investment advice.** All outputs are historical simulations, not predictions or recommendations.
 - **Survivorship bias — confirmed present.** The cached 12-fund universe (`data/sec/mvp_fund_universe.csv`) is built by [`scripts/sec_build_mvp_universe.py`](scripts/sec_build_mvp_universe.py), which explicitly excludes any SEC record with a `cancel_date` set or a `fund_status` other than `Registered`. Verified live against the SEC Open Data API: a single search term (`SET`) alone returns funds with `fund_status` of `Liquidated` and `Expired` alongside `Registered` ones, and 5 of the first 100 records carry a `cancel_date`. All 12 funds currently in the cache are `Registered` with no `cancel_date` — confirming the exclusion is active, not merely theoretical. This means historical returns in this tool are computed only over funds that survived to today; funds that closed or merged away are not represented, which biases aggregate/comparative conclusions upward (see Elton, Gruber & Blake on survivorship bias in mutual fund databases). Do not treat this dataset as survivorship-bias-free, and do not extrapolate past this specific fund list to the broader Thai mutual fund market.
@@ -237,15 +250,15 @@ Running a Past Performance backtest on a two-fund equal-weight portfolio (2020-0
 - **Single-user, no persistence** — portfolios and results exist only in browser state for the current session; there is no account system or saved-portfolio database yet.
 - **Known flaky E2E test**: `frontend/e2e/happy-path.spec.ts`'s second test ("URL updates with a shareable run id...") intermittently fails under Playwright/headless Chromium automation (roughly 1 in 4–5 runs), even though the feature it tests works correctly — confirmed via manual browser testing, curl, and debug logging showing the app's own state-setting code runs correctly every single time, including in the failing case. Root cause not identified despite extensive investigation (ruled out: Vite dev-server/HMR, React state-batching via `flushSync`, Playwright-locator-specific timing via a direct `waitForFunction` DOM check). `retries: 2` in `playwright.config.ts` mitigates it without masking a real regression, since an actual bug would fail deterministically rather than ~20% of the time. The first test in the same file (the core happy path: select funds → assumptions → run → view results) has never been observed to fail.
 
-## 13. Roadmap
+## 14. Roadmap
 
 Planned next (see issues for detail): side-by-side multi-portfolio comparison, portfolio templates, and CSV import from broker exports. Contributions and discussion welcome via GitHub Issues.
 
-## 14. License
+## 15. License
 
 Released under the [MIT License](LICENSE).
 
-## 15. Acknowledgments & Data Attribution
+## 16. Acknowledgments & Data Attribution
 
 - **Author:** [Supachok Julaupay](https://github.com/bblank09) &mdash; [github.com/bblank09](https://github.com/bblank09).
 - Fund NAV and profile data: [SEC Thailand Open Data](https://api.sec.or.th/) (Securities and Exchange Commission, Thailand).
