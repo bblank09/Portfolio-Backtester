@@ -2,13 +2,13 @@
   "source": "SEC Open Data",
   "endpoint": "/v2/fund/daily-info/nav",
   "start": "2015-01-01",
-  "end": "2026-07-27",
-  "raw_dir": "data/sec/raw/daily_nav/20260727_230906",
+  "end": "2026-08-02",
+  "raw_dir": "data/sec/raw/daily_nav/20260802_092807",
   "fund_count": 12,
-  "nav_rows": 29731,
-  "request_count": 304,
+  "nav_rows": 29773,
+  "request_count": 305,
   "status_counts": {
-    "success": 304
+    "success": 305
   },
   "valid_for_backtest": true
 }
