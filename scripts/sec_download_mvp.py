@@ -16,6 +16,7 @@ START_DATE = date(2015, 1, 1)
 MAX_RETRIES = 4
 BASE_SLEEP_SECONDS = 0.25
 PAGE_SIZE = 100
+BLOCKING_STATUSES = {"rate_limited", "auth_error", "server_error", "network_error", "http_error"}
 
 
 def classify_http_status(status_code: int) -> str:
@@ -57,6 +58,47 @@ def raw_file_for(raw_dir: Path, proj_id: str, page_no: int) -> Path:
     return raw_dir / f"{safe_proj_id}_{page_no:04d}.json"
 
 
+def normalize_page_records(
+    payload: object, proj_id: str, expected_fund_class_name: str | None = None
+) -> tuple[list[dict], list[dict]]:
+    """Normalize every NAV record on a page, without letting one genuinely
+    bad record (e.g. a real 0.0 NAV in SEC's own data) abort the whole run.
+
+    A single fund out of hundreds/thousands having one bad day does not mean
+    the rest of its NAV history is untrustworthy -- across a full-universe
+    pull this WILL happen (SEC's raw data is not perfectly clean), so this
+    is expected steady-state behavior, not exceptional. The bad row is
+    skipped and recorded for audit, never fabricated or forward-filled.
+
+    SEC's daily-info/nav endpoint returns EVERY share class registered
+    under a proj_id, not just the one the universe build chose (data/sec/
+    mvp_fund_universe.csv picks exactly one class per proj_id). Different
+    classes of the same fund can have genuinely different NAV per unit on
+    the same date (e.g. accumulation vs. dividend-paying classes) --
+    load_nav_panel keys its panel by proj_id alone, so leaving multiple
+    classes' rows in daily_nav.parquet would let its pivot_table silently
+    mix NAV series from two different classes into one series. When
+    `expected_fund_class_name` is given, records for any other class are
+    dropped here (not an error -- SEC returning them is completely normal).
+    """
+    valid_rows = []
+    issues = []
+    for record in records(payload):
+        if expected_fund_class_name and record.get("fund_class_name") != expected_fund_class_name:
+            continue
+        try:
+            valid_rows.append(normalize_daily_nav_record(record, proj_id=proj_id))
+        except ValueError as exc:
+            issues.append(
+                {
+                    "proj_id": proj_id,
+                    "nav_date": record.get("nav_date") or record.get("NAV_DATE") or "",
+                    "error": str(exc),
+                }
+            )
+    return valid_rows, issues
+
+
 def main():
     universe_path = Path("data/sec/mvp_fund_universe.csv")
     if not universe_path.exists():
@@ -71,11 +113,13 @@ def main():
     raw_dir.mkdir(parents=True, exist_ok=True)
     nav_rows = []
     ledger_rows = []
+    data_quality_issues = []
     end_date = snapshot_time.date()
     client = SecOpenDataClient()
 
     for fund in funds:
         proj_id = fund["proj_id"]
+        expected_fund_class_name = fund.get("fund_class_name") or None
         next_cursor = ""
         page_no = 0
         while True:
@@ -105,8 +149,9 @@ def main():
                 raw_file_for(raw_dir, proj_id, page_no).write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
             if classification != "success":
                 break
-            for record in records(payload):
-                nav_rows.append(normalize_daily_nav_record(record, proj_id=proj_id))
+            valid_rows, issues = normalize_page_records(payload, proj_id=proj_id, expected_fund_class_name=expected_fund_class_name)
+            nav_rows.extend(valid_rows)
+            data_quality_issues.extend(issues)
             next_cursor = payload.get("next_cursor") if isinstance(payload, dict) else ""
             if not next_cursor:
                 break
@@ -115,8 +160,9 @@ def main():
     write_parquet("daily_nav", nav_rows)
     write_parquet("fund_classes", funds)
     write_parquet("nav_request_ledger", ledger_rows)
-    blocking_statuses = {"rate_limited", "auth_error", "server_error", "network_error", "http_error"}
-    blocking = [row for row in ledger_rows if row["status"] in blocking_statuses]
+    if data_quality_issues:
+        write_parquet("nav_data_quality_issues", data_quality_issues)
+    blocking = [row for row in ledger_rows if row["status"] in BLOCKING_STATUSES]
     status_counts = pd.Series([row["status"] for row in ledger_rows]).value_counts().to_dict() if ledger_rows else {}
     manifest = {
         "source": "SEC Open Data",
@@ -128,6 +174,11 @@ def main():
         "nav_rows": len(nav_rows),
         "request_count": len(ledger_rows),
         "status_counts": status_counts,
+        # Individually-invalid NAV records (e.g. a real 0.0 in SEC's own
+        # data) are skipped and recorded here, not fabricated -- they do
+        # NOT block valid_for_backtest since the rest of that fund's real
+        # NAV history is still trustworthy. See nav_data_quality_issues.parquet.
+        "skipped_invalid_nav_rows": len(data_quality_issues),
         "valid_for_backtest": len(blocking) == 0 and len(nav_rows) > 0,
     }
     write_manifest(manifest)

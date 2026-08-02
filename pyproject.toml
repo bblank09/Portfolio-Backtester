@@ -7,7 +7,16 @@ dependencies = [
   "uvicorn[standard]>=0.30",
   "pydantic>=2.7",
   "pydantic-settings>=2.2",
-  "pandas>=2.2",
+  # pandas 2.2.3 has a confirmed data-corruption bug in pivot_table/
+  # groupby+unstack reshapes at wide-panel scale (~2,700 rows x 800+
+  # columns): the resulting index silently collapses to a handful of
+  # duplicate labels with no error, regardless of dtype or whether the
+  # input has duplicate keys. Reproduced with a clean synthetic dataset
+  # (no real-data noise) and confirmed absent under pandas 3.0.5, which
+  # this project's load_nav_panel()/align_nav_panel() depend on being
+  # correct for every backtest. Do not lower this floor without
+  # re-verifying at 800+-fund panel scale, not just the unit tests.
+  "pandas>=3.0",
   "numpy>=1.26",
   "scipy>=1.13",
   "httpx>=0.27",

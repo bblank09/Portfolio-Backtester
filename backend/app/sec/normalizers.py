@@ -77,5 +77,4 @@ def normalize_daily_nav_record(record: dict, proj_id: str | None = None) -> dict
         "sell_price": to_float(pick(record, ["sell_price", "SELL_PRICE"], required=False)),
         "buy_price": to_float(pick(record, ["buy_price", "BUY_PRICE"], required=False)),
         "last_upd_date": pick(record, ["last_upd_date", "LAST_UPD_DATE", "updated_at"], required=False),
-        "raw": record,
     }
