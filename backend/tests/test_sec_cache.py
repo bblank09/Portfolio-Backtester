@@ -35,6 +35,42 @@ def test_load_nav_panel_pushes_proj_id_filter_down_to_parquet_read(monkeypatch, 
     assert captured["filters"] == [("proj_id", "in", ["FUND_A", "FUND_B"])]
 
 
+def test_migrate_schema_adds_missing_columns_with_defaults(monkeypatch, tmp_path):
+    # Pulling the full SEC universe (checklist 8.8) needs new columns on
+    # fund_classes (e.g. fund_status, cancel_date, for survivorship-bias
+    # auditing) that the currently-committed cache doesn't have yet.
+    monkeypatch.setattr(sec_cache, "NORMALIZED_DIR", tmp_path)
+    sec_cache.write_parquet("fund_classes", [{"proj_id": "A", "display_name": "Fund A"}])
+
+    added = sec_cache.migrate_schema("fund_classes", {"fund_status": "", "cancel_date": None})
+
+    assert added == ["fund_status", "cancel_date"]
+    migrated = pd.read_parquet(tmp_path / "fund_classes.parquet")
+    assert migrated["fund_status"].tolist() == [""]
+    assert migrated["cancel_date"].tolist() == [None]
+    # Existing data must survive the migration untouched.
+    assert migrated["proj_id"].tolist() == ["A"]
+    assert migrated["display_name"].tolist() == ["Fund A"]
+
+
+def test_migrate_schema_is_idempotent_and_never_overwrites_existing_values(monkeypatch, tmp_path):
+    monkeypatch.setattr(sec_cache, "NORMALIZED_DIR", tmp_path)
+    sec_cache.write_parquet("fund_classes", [{"proj_id": "A", "fund_status": "Registered"}])
+
+    added = sec_cache.migrate_schema("fund_classes", {"fund_status": ""})
+
+    assert added == []
+    migrated = pd.read_parquet(tmp_path / "fund_classes.parquet")
+    assert migrated["fund_status"].tolist() == ["Registered"]
+
+
+def test_migrate_schema_raises_a_clear_error_for_an_unknown_dataset(monkeypatch, tmp_path):
+    monkeypatch.setattr(sec_cache, "NORMALIZED_DIR", tmp_path)
+
+    with pytest.raises(FileNotFoundError):
+        sec_cache.migrate_schema("does_not_exist", {"col": None})
+
+
 def test_align_nav_panel_monthly_last_value():
     panel = pd.DataFrame(
         {"FUND_A": [10.0, 11.0, 12.0], "FUND_B": [20.0, 22.0, 24.0]},

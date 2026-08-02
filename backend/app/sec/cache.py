@@ -20,6 +20,31 @@ def write_manifest(manifest: dict) -> Path:
     return path
 
 
+def migrate_schema(name: str, defaults: dict[str, object]) -> list[str]:
+    """Additively bring an existing cached parquet up to a target schema.
+
+    Only ever *adds* columns (with the given default value) -- it never
+    renames, drops, or overwrites an existing column's values, so a
+    partially-migrated cache is always still readable by both old and new
+    code, and re-running the migration is always a safe no-op. This is the
+    strategy for schema changes driven by pulling more fields from SEC
+    (e.g. fund_status/cancel_date on fund_classes once the full fund
+    universe is fetched, checklist 8.8) without invalidating or having to
+    re-download the whole cache.
+    """
+    path = NORMALIZED_DIR / f"{name}.parquet"
+    if not path.exists():
+        raise FileNotFoundError(f"No cached parquet named {name!r} at {path}")
+    df = pd.read_parquet(path)
+    added = [column for column in defaults if column not in df.columns]
+    if not added:
+        return []
+    for column in added:
+        df[column] = defaults[column]
+    df.to_parquet(path, index=False)
+    return added
+
+
 def load_nav_panel(proj_ids: list[str]) -> pd.DataFrame:
     # `filters` is pushed down into the parquet read itself (row-group
     # pruning via pyarrow) so only the requested funds' rows are ever
