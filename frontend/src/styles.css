@@ -523,6 +523,11 @@ p, small { color: var(--text-secondary); }
 .chartTooltip span { display: flex; align-items: center; gap: 6px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
 .chartTooltip i { display: inline-block; width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 
+.srOnly {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+
 .tableScroller { max-height: 420px; overflow: auto; border-radius: var(--r-sm); }
 .compactTable .tableScroller { max-height: 260px; }
 .tables { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-top: 14px; }
@@ -541,7 +546,12 @@ th { position: sticky; top: 0; background: var(--surface); color: var(--text-ter
 .heatCell { min-height: 26px; border-radius: 4px; color: #fff; display: grid; place-items: center; font-size: 10px; font-weight: 700; overflow: hidden; font-variant-numeric: tabular-nums; }
 
 .hist { display: flex; align-items: end; gap: 4px; min-height: 96px; margin: 12px 0; }
-.histBar { flex: 1; min-height: 5px; border-radius: 3px 3px 0 0; }
+.histBar { flex: 1; min-height: 5px; border-radius: 3px 3px 0 0; border-top: 2px solid transparent; }
+.histBar-gain { background: #137a4f; border-top-color: #0a4a30; }
+.histBar-loss { background: #b42318; border-top-style: dashed; border-top-color: #6f140e; }
+
+.correlationMatrix td { text-align: center; font-weight: 650; font-variant-numeric: tabular-nums; min-width: 64px; }
+.correlationMatrix th[scope="row"] { white-space: nowrap; }
 
 .allocationBarRow { display: grid; gap: 6px; margin-bottom: 10px; }
 .allocationBarRow span { color: var(--text-secondary); font-size: 12px; font-weight: 700; }
@@ -557,4 +567,17 @@ th { position: sticky; top: 0; background: var(--surface); color: var(--text-ter
 @media (max-width: 640px) {
   .metricGrid, .alwaysOnGrid { grid-template-columns: 1fr; }
   .monthHeaders, .heatRow { grid-template-columns: 44px repeat(12, 38px); overflow-x: auto; }
+}
+
+/* ---------- Print (Report tab -> "Print / Save PDF") ---------- */
+@media print {
+  .topbar, .app-footer, .resultTabs, .exportActions, .run-overlay, .actions,
+  .resultHeader .secondaryButton, .theme-toggle {
+    display: none !important;
+  }
+  .shell { display: block; min-height: 0; }
+  .page { max-width: none; }
+  .resultShell, .reportPanel, .chartPanel, .tablePanel { box-shadow: none; border: 1px solid #ccc; break-inside: avoid; }
+  .tableScroller { max-height: none; overflow: visible; }
+  body { background: #fff; color: #000; }
 }

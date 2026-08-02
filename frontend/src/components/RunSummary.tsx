@@ -102,7 +102,7 @@ function SummaryTab({ result, setActiveTab }: { result: BacktestResult; setActiv
       </div>
       <section className="chartPanel">
         <h3>Result checklist</h3>
-        <DataTable section={{ title: "", rows: resultChecklist(result) }} compact />
+        <DataTable caption="Result checklist" compact section={{ title: "", rows: resultChecklist(result) }} />
       </section>
       <section className="chartPanel">
         <h3>Always-on analysis</h3>
@@ -139,19 +139,33 @@ function GrowthTab({ result }: { result: BacktestResult }) {
       ]} valueFormat={money.format} />
       <section className="chartPanel">
         <h3>Value milestones</h3>
-        <DataTable section={{ title: "", rows: milestoneRows(result, netInvested) }} />
+        <DataTable caption="Value milestones" section={{ title: "", rows: milestoneRows(result, netInvested) }} />
       </section>
       <section className="chartPanel">
         <h3>Trailing performance</h3>
-        <DataTable section={{ title: "", rows: derived.trailingReturns }} />
+        <DataTable caption="Trailing performance" section={{ title: "", rows: derived.trailingReturns }} />
       </section>
       <AxisCurve title="Rolling 12M return and volatility" series={[
         { label: "Rolling return", points: derived.rolling.map((row) => ({ date: row.date, value: row.return })), color: "#5b21d6", valueFormat: pct.format },
         { label: "Rolling volatility", points: derived.rolling.map((row) => ({ date: row.date, value: row.volatility })), color: "#0ea5e9", valueFormat: pct.format }
       ]} valueFormat={pct.format} />
+      {derived.rolling.some((row) => row.sharpe !== null) ? (
+        <section className="chartPanel">
+          <h3>Rolling 12M Sharpe</h3>
+          <p className="summaryText">A point-in-time Sharpe ratio can look good purely by luck of the end date; this tracks how the risk-adjusted return held up across every trailing 12-month window.</p>
+          <AxisCurve title="Rolling 12M Sharpe ratio" series={[
+            {
+              label: "Rolling Sharpe",
+              points: derived.rolling.filter((row) => row.sharpe !== null).map((row) => ({ date: row.date, value: row.sharpe as number })),
+              color: "#5b21d6",
+              valueFormat: number.format
+            }
+          ]} valueFormat={number.format} />
+        </section>
+      ) : null}
       <section className="chartPanel">
         <h3>Rolling 12M table</h3>
-        <DataTable section={{ title: "", rows: derived.rolling }} />
+        <DataTable caption="Rolling 12M table" section={{ title: "", rows: derived.rolling }} />
       </section>
     </div>
   );
@@ -171,16 +185,16 @@ function DrawdownTab({ result }: { result: BacktestResult }) {
       ]} valueFormat={pct.format} />
       <section className="chartPanel">
         <h3>Drawdown stress scenarios</h3>
-        <DataTable section={{ title: "", rows: stressRows(result) }} />
+        <DataTable caption="Drawdown stress scenarios" section={{ title: "", rows: stressRows(result) }} />
       </section>
       <div className="panelGrid">
         <section className="chartPanel">
           <h3>Worst drawdown periods</h3>
-          <DataTable section={{ title: "", rows: derived.drawdownPeriods }} />
+          <DataTable caption="Worst drawdown periods" section={{ title: "", rows: derived.drawdownPeriods }} />
         </section>
         <section className="chartPanel">
           <h3>Stress interpretation</h3>
-          <DataTable section={{ title: "", rows: stressInterpretationRows(result, derived) }} />
+          <DataTable caption="Stress interpretation" section={{ title: "", rows: stressInterpretationRows(result, derived) }} />
         </section>
       </div>
     </div>
@@ -196,16 +210,16 @@ function ReturnsTab({ result }: { result: BacktestResult }) {
       <section className="chartPanel">
         <h3>Monthly return distribution</h3>
         <Histogram rows={derived.histogram} />
-        <DataTable section={{ title: "", rows: derived.histogram }} compact />
+        <DataTable caption="Monthly return distribution" compact section={{ title: "", rows: derived.histogram }} />
       </section>
       <div className="panelGrid">
         <section className="chartPanel">
           <h3>Best months</h3>
-          <DataTable section={{ title: "", rows: derived.bestMonths }} />
+          <DataTable caption="Best months" section={{ title: "", rows: derived.bestMonths }} />
         </section>
         <section className="chartPanel">
           <h3>Worst months</h3>
-          <DataTable section={{ title: "", rows: derived.worstMonths }} />
+          <DataTable caption="Worst months" section={{ title: "", rows: derived.worstMonths }} />
         </section>
       </div>
     </div>
@@ -218,16 +232,23 @@ function MetricsTab({ result }: { result: BacktestResult }) {
     <div className="tabStack">
       <section className="chartPanel">
         <h3>Metrics</h3>
-        <DataTable section={{ title: "", rows: keyMetricRows(result) }} />
+        <DataTable caption="Metrics" section={{ title: "", rows: keyMetricRows(result) }} />
       </section>
       <section className="chartPanel">
         <h3>Asset risk and allocation</h3>
-        <DataTable section={{ title: "", rows: assetRows(result) }} />
+        <DataTable caption="Asset risk and allocation" section={{ title: "", rows: assetRows(result) }} />
       </section>
       <section className="chartPanel">
         <h3>Diversification Check</h3>
-        <DataTable section={{ title: "", rows: result.diversification.rows }} />
+        <DataTable caption="Diversification Check" section={{ title: "", rows: result.diversification.rows }} />
       </section>
+      {result.diversification.rows.length ? (
+        <section className="chartPanel">
+          <h3>Correlation matrix</h3>
+          <p className="summaryText">Same pairwise correlations as the table above, laid out as a grid so clusters of highly correlated funds &mdash; the ones providing the least diversification benefit &mdash; are visible at a glance.</p>
+          <CorrelationMatrix result={result} />
+        </section>
+      ) : null}
       {result.rolling_correlation.length ? (
         <section className="chartPanel">
           <h3>Rolling correlation</h3>
@@ -237,7 +258,7 @@ function MetricsTab({ result }: { result: BacktestResult }) {
       ) : null}
       <section className="chartPanel">
         <h3>Benchmark risk decomposition</h3>
-        <DataTable section={{ title: "", rows: benchmarkDecompositionRows(result, derived) }} />
+        <DataTable caption="Benchmark risk decomposition" section={{ title: "", rows: benchmarkDecompositionRows(result, derived) }} />
       </section>
       <p className="footnote">Full equations for every metric on this page are in the Report tab's Formula reference section.</p>
     </div>
@@ -303,6 +324,7 @@ function ReportTab({ result }: { result: BacktestResult }) {
           <button className="secondaryButton" onClick={() => downloadText("report.md", reportMarkdown(result, derived), "text/markdown")} type="button">report.md</button>
           <button className="secondaryButton" onClick={() => downloadText("run_config.json", JSON.stringify(result.request, null, 2), "application/json")} type="button">run_config.json</button>
           <button className="secondaryButton" onClick={() => downloadText("metrics.json", JSON.stringify(result.summary, null, 2), "application/json")} type="button">metrics.json</button>
+          <button className="secondaryButton" onClick={() => window.print()} type="button">Print / Save PDF</button>
         </div>
       </section>
 
@@ -319,51 +341,52 @@ function ReportTab({ result }: { result: BacktestResult }) {
         </ReportSection>
 
         <ReportSection title="3. Portfolio specification">
-          <DataTable section={{ title: "", rows: assumptionRows(result) }} compact />
+          <DataTable caption="Portfolio specification" compact section={{ title: "", rows: assumptionRows(result) }} />
         </ReportSection>
 
         <ReportSection title="4. Performance results">
-          <DataTable section={{ title: "", rows: keyMetricRows(result) }} />
+          <DataTable caption="Performance results" section={{ title: "", rows: keyMetricRows(result) }} />
         </ReportSection>
 
         <ReportSection title="5. Risk and benchmark analysis">
-          <DataTable section={result.risk_metrics} compact />
-          <DataTable section={{ title: "", rows: benchmarkDecompositionRows(result, derived) }} />
+          <DataTable compact section={result.risk_metrics} />
+          <DataTable caption="Benchmark risk decomposition" section={{ title: "", rows: benchmarkDecompositionRows(result, derived) }} />
         </ReportSection>
 
         <ReportSection title="6. Drawdown analysis">
-          <DataTable section={{ title: "", rows: stressRows(result) }} />
+          <DataTable caption="Drawdown stress scenarios" section={{ title: "", rows: stressRows(result) }} />
           <DataTable section={{ title: "Worst historical drawdown periods", rows: derived.drawdownPeriods }} />
         </ReportSection>
 
         <ReportSection title="7. Diversification and correlation">
-          <DataTable section={result.diversification} compact />
+          <DataTable compact section={result.diversification} />
         </ReportSection>
 
         <ReportSection title="8. Asset-level attribution">
-          <DataTable section={{ title: "", rows: assetRows(result) }} />
+          <DataTable caption="Asset-level attribution" section={{ title: "", rows: assetRows(result) }} />
         </ReportSection>
 
         {hasCashflow ? (
           <ReportSection title="9. Cashflow analysis">
-            <DataTable section={{ title: "", rows: yearlyCashflowRows(result) }} compact />
+            <DataTable caption="Cashflow analysis" compact section={{ title: "", rows: yearlyCashflowRows(result) }} />
           </ReportSection>
         ) : null}
 
         {hasRebalancing ? (
           <ReportSection title={hasCashflow ? "10. Rebalancing analysis" : "9. Rebalancing analysis"}>
             <DataTable
+              caption="Rebalancing analysis"
+              compact
               section={{
                 title: "",
                 rows: result.rebalances.map((row) => ({ date: row.date, turnover: pct.format(row.turnover), cost: money.format(row.cost) }))
               }}
-              compact
             />
           </ReportSection>
         ) : null}
 
         <ReportSection title="Formula reference">
-          <DataTable section={{ title: "", rows: formulaReferenceRows() }} compact />
+          <DataTable caption="Formula reference" compact section={{ title: "", rows: formulaReferenceRows() }} />
         </ReportSection>
 
         <ReportSection title="Limitations">
@@ -544,14 +567,16 @@ function xForIndex(index: number, length: number) {
   return 70 + (index / Math.max(1, length - 1)) * 780;
 }
 
-function DataTable({ section, compact = false }: { section: TableSection; compact?: boolean }) {
+function DataTable({ section, compact = false, caption }: { section: TableSection; compact?: boolean; caption?: string }) {
   const rows = section.rows;
   const columns = rows.length ? Object.keys(rows[0]) : [];
+  const resolvedCaption = section.title || caption;
   return (
     <div className={compact ? "tablePanel compactTable" : "tablePanel"}>
       {section.title ? <h3>{section.title}</h3> : null}
       <div className="tableScroller">
         <table>
+          {resolvedCaption ? <caption className="srOnly">{resolvedCaption}</caption> : null}
           <thead>
             <tr>{columns.map((column) => <th key={column}>{humanize(column)}</th>)}</tr>
           </thead>
@@ -599,16 +624,14 @@ function MonthlyHeatmap({ rows }: { rows: MonthlyGridRow[] }) {
 function Histogram({ rows }: { rows: { bin: string; count: number; from: number }[] }) {
   const maxCount = Math.max(...rows.map((row) => row.count), 1);
   return (
-    <div className="hist">
+    <div className="hist" role="img" aria-label={`Monthly return distribution histogram: ${rows.map((row) => `${row.bin}, ${row.count} months`).join("; ")}`}>
       {rows.map((row) => (
-        <span
-          className="histBar"
+        <div
+          aria-hidden="true"
+          className={row.from >= 0 ? "histBar histBar-gain" : "histBar histBar-loss"}
           key={row.bin}
+          style={{ height: `${Math.max(5, (row.count / maxCount) * 92)}px` }}
           title={`${row.bin}: ${row.count}`}
-          style={{
-            height: `${Math.max(5, (row.count / maxCount) * 92)}px`,
-            background: row.from >= 0 ? "#137a4f" : "#b42318"
-          }}
         />
       ))}
     </div>
@@ -1134,6 +1157,53 @@ function annualize(totalReturn: number, months: number) {
 function heatColor(value: number) {
   const opacity = Math.max(0.16, Math.min(0.9, Math.abs(value) / 0.08 + 0.12));
   return value >= 0 ? `rgb(19 122 79 / ${opacity})` : `rgb(180 35 24 / ${opacity})`;
+}
+
+// Correlation ranges -1..1 (not the +/-8% monthly-return scale heatColor was
+// tuned for), so it needs its own opacity mapping rather than reusing heatColor.
+function correlationColor(value: number) {
+  const opacity = Math.max(0.14, Math.min(0.85, Math.abs(value)));
+  return value >= 0 ? `rgb(19 122 79 / ${opacity})` : `rgb(180 35 24 / ${opacity})`;
+}
+
+function CorrelationMatrix({ result }: { result: BacktestResult }) {
+  const displayNameById = new Map(result.request.assets.map((asset) => [asset.proj_id, asset.display_name]));
+  const ids = result.request.assets.map((asset) => asset.proj_id);
+  const correlationByPair = new Map<string, number | null>();
+  result.diversification.rows.forEach((row) => {
+    const a = String(row.asset_a);
+    const b = String(row.asset_b);
+    correlationByPair.set(`${a}|${b}`, row.correlation as number | null);
+    correlationByPair.set(`${b}|${a}`, row.correlation as number | null);
+  });
+  return (
+    <div className="tableScroller">
+      <table className="correlationMatrix">
+        <caption className="srOnly">Correlation matrix between every pair of portfolio funds</caption>
+        <thead>
+          <tr>
+            <th scope="col" />
+            {ids.map((id) => <th key={id} scope="col">{displayNameById.get(id) ?? id}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {ids.map((rowId) => (
+            <tr key={rowId}>
+              <th scope="row">{displayNameById.get(rowId) ?? rowId}</th>
+              {ids.map((colId) => {
+                const value = rowId === colId ? 1 : correlationByPair.get(`${rowId}|${colId}`) ?? null;
+                return (
+                  <td key={colId} style={{ background: value == null ? undefined : correlationColor(value) }}>
+                    {value == null ? "n/a" : number.format(value)}
+                  </td>
+                );
+              })}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
 }
 
 function formatCell(value: unknown) {
