@@ -138,6 +138,40 @@ export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Pro
     commit(rows.map((row) => (row.key === key ? { ...row, weight } : row)));
   }
 
+  function setWeights(updates: Map<string, number>) {
+    commit(rows.map((row) => (updates.has(row.key) ? { ...row, weight: updates.get(row.key)! } : row)));
+  }
+
+  // Equal weight / normalize / clear are the standard bulk-allocation actions
+  // in professional portfolio backtesters (Portfolio Visualizer, testfol.io)
+  // -- without them, summing to exactly 100% is manual arithmetic on every edit.
+  function equalWeightAll() {
+    if (!rows.length) return;
+    const share = Math.round((100 / rows.length) * 10) / 10;
+    const remainder = Math.round((100 - share * (rows.length - 1)) * 10) / 10;
+    commit(rows.map((row, index) => ({ ...row, weight: index === rows.length - 1 ? remainder : share })));
+  }
+
+  function normalizeWeights() {
+    const currentTotal = rows.reduce((sum, row) => sum + (row.weight || 0), 0);
+    if (currentTotal <= 0) {
+      equalWeightAll();
+      return;
+    }
+    const scaled = rows.map((row) => (row.weight || 0) * (100 / currentTotal));
+    // Round to 1dp but correct the last row so the sum is exactly 100 -- naive
+    // per-row rounding alone can drift to 99.9%/100.1% and fail the "ready" check.
+    const rounded = scaled.map((weight) => Math.round(weight * 10) / 10);
+    const roundedTotal = rounded.reduce((sum, weight) => sum + weight, 0);
+    const drift = Math.round((100 - roundedTotal) * 10) / 10;
+    if (rounded.length) rounded[rounded.length - 1] = Math.round((rounded[rounded.length - 1] + drift) * 10) / 10;
+    commit(rows.map((row, index) => ({ ...row, weight: rounded[index] })));
+  }
+
+  function clearWeights() {
+    commit(rows.map((row) => ({ ...row, weight: 0 })));
+  }
+
   function loadExample() {
     if (funds.length < 2) return;
     seedRows(funds.slice(0, 2).map((fund, index) => ({ fund, weight: index === 0 ? 60 : 40 })));
@@ -149,8 +183,16 @@ export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Pro
   const complete = allNamed && Math.abs(total - 100) < 0.05 && committedRows.length > 0;
   const selectedIds = new Set(rows.map((row) => row.projId));
 
+  function handlePageKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key !== "Enter" || event.defaultPrevented || !complete) return;
+    // A row's own combobox already handled Enter (calling preventDefault) if
+    // it was selecting a highlighted suggestion -- only reaching here means
+    // no combobox intercepted it, so it's safe to treat as "submit".
+    onContinue();
+  }
+
   return (
-    <div className={active ? "page active" : "page"}>
+    <div className={active ? "page active" : "page"} onKeyDown={handlePageKeyDown}>
       <div className="page-head">
         <h1>Build your portfolio</h1>
         <p>Search SEC-registered mutual funds by name or class, set target weights, and confirm they sum to 100% before setting your assumptions.</p>
@@ -192,14 +234,23 @@ export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Pro
         </div>
 
         <div className="holdings-foot">
-          <button className="add-asset" onClick={addRow} type="button">+ Add fund</button>
+          <div className="holdings-foot-left">
+            <button className="add-asset" onClick={addRow} type="button">+ Add fund</button>
+            <div className="weight-actions">
+              <button className="link-btn" onClick={equalWeightAll} type="button">Equal weight</button>
+              <span aria-hidden="true">&middot;</span>
+              <button className="link-btn" onClick={normalizeWeights} type="button">Normalize to 100%</button>
+              <span aria-hidden="true">&middot;</span>
+              <button className="link-btn" onClick={clearWeights} type="button">Clear</button>
+            </div>
+          </div>
           <div className="weight-total">
             Total <span>{formatPct(total)}</span>
             <span className={complete ? "pill ok" : "pill warn"}>{complete ? "ready" : "incomplete"}</span>
           </div>
         </div>
 
-        {complete ? <AllocationDonut rows={committedRows} fundsById={fundsById} /> : null}
+        {complete ? <AllocationDonut fundsById={fundsById} onWeightsChange={setWeights} rows={committedRows} /> : null}
       </div>
 
       <div className="actions">
@@ -261,18 +312,21 @@ function HoldingsRow({
     const haystack = `${item.proj_id} ${item.display_name} ${item.fund_class_name} ${item.search_term} ${item.amc_name_en} ${item.policy_desc}`.toLowerCase();
     return haystack.includes(query);
   });
+  const visibleOptions = options.slice(0, 8);
+  const listboxId = `${row.key}-listbox`;
+  const optionId = (index: number) => `${row.key}-option-${index}`;
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (!open) return;
     if (event.key === "ArrowDown") {
       event.preventDefault();
-      setHighlight((current) => Math.min(options.length - 1, current + 1));
+      setHighlight((current) => Math.min(visibleOptions.length - 1, current + 1));
     } else if (event.key === "ArrowUp") {
       event.preventDefault();
       setHighlight((current) => Math.max(0, current - 1));
-    } else if (event.key === "Enter" && options[highlight]) {
+    } else if (event.key === "Enter" && visibleOptions[highlight]) {
       event.preventDefault();
-      onSelect(options[highlight]);
+      onSelect(visibleOptions[highlight]);
       setOpen(false);
     } else if (event.key === "Escape") {
       setOpen(false);
@@ -289,8 +343,14 @@ function HoldingsRow({
     <div className="holdings-row">
       <div className="fund-field" onBlur={handleBlur} ref={fieldRef}>
         <input
+          aria-activedescendant={open && visibleOptions[highlight] ? optionId(highlight) : undefined}
+          aria-autocomplete="list"
+          aria-controls={listboxId}
+          aria-expanded={open}
+          aria-label="Search SEC fund by name, class, or proj_id"
           className="field fund-input"
           ref={inputRef}
+          role="combobox"
           value={displayValue}
           placeholder="Search fund name, class, or proj_id..."
           onFocus={() => { setOpen(true); setHighlight(0); }}
@@ -328,18 +388,23 @@ function HoldingsRow({
               ) : null}
             </div>
           ) : null}
-          {options.slice(0, 8).map((item, index) => (
-            <button
-              className={index === highlight ? "highlighted" : ""}
-              key={`${item.proj_id}-${item.fund_class_name}`}
-              onMouseDown={(event) => { event.preventDefault(); onSelect(item); setOpen(false); }}
-              type="button"
-            >
-              {item.display_name}
-              <span className="fid">{item.proj_id} &middot; {item.fund_class_name}</span>
-            </button>
-          ))}
-          {!options.length ? <button disabled type="button">No matching funds</button> : null}
+          <div aria-label="Fund suggestions" id={listboxId} role="listbox">
+            {visibleOptions.map((item, index) => (
+              <button
+                aria-selected={index === highlight}
+                className={index === highlight ? "highlighted" : ""}
+                id={optionId(index)}
+                key={`${item.proj_id}-${item.fund_class_name}`}
+                onMouseDown={(event) => { event.preventDefault(); onSelect(item); setOpen(false); }}
+                role="option"
+                type="button"
+              >
+                {item.display_name}
+                <span className="fid">{item.proj_id} &middot; {item.fund_class_name}</span>
+              </button>
+            ))}
+            {!options.length ? <button disabled type="button">No matching funds</button> : null}
+          </div>
         </div>
       </div>
       <input
@@ -412,44 +477,155 @@ function FacetGroup({
   );
 }
 
-function AllocationDonut({ rows, fundsById }: { rows: Row[]; fundsById: Map<string, SecFund> }) {
+const MIN_SLICE_WEIGHT = 1;
+
+function AllocationDonut({
+  rows,
+  fundsById,
+  onWeightsChange
+}: {
+  rows: Row[];
+  fundsById: Map<string, SecFund>;
+  onWeightsChange: (updates: Map<string, number>) => void;
+}) {
+  const svgRef = useRef<SVGSVGElement | null>(null);
+  const [dragBoundary, setDragBoundary] = useState<number | null>(null);
   const total = rows.reduce((sum, row) => sum + (row.weight || 0), 0) || 1;
   const cx = 60;
   const cy = 60;
   const r = 50;
   const inner = 30;
+  const n = rows.length;
+
   let angle = -90;
   const arcs = rows.map((row, index) => {
     const share = (row.weight || 0) / total;
     const sweep = share * 360;
-    const x1 = cx + r * Math.cos((angle * Math.PI) / 180);
-    const y1 = cy + r * Math.sin((angle * Math.PI) / 180);
-    const endAngle = angle + sweep;
+    const startAngle = angle;
+    const x1 = cx + r * Math.cos((startAngle * Math.PI) / 180);
+    const y1 = cy + r * Math.sin((startAngle * Math.PI) / 180);
+    const endAngle = startAngle + sweep;
     const x2 = cx + r * Math.cos((endAngle * Math.PI) / 180);
     const y2 = cy + r * Math.sin((endAngle * Math.PI) / 180);
     const large = sweep > 180 ? 1 : 0;
     const color = PALETTE[index % PALETTE.length];
     const d = `M${cx},${cy} L${x1.toFixed(2)},${y1.toFixed(2)} A${r},${r} 0 ${large} 1 ${x2.toFixed(2)},${y2.toFixed(2)} Z`;
     angle = endAngle;
-    return { d, color, label: fundsById.get(row.projId)?.display_name ?? row.projId, weight: row.weight };
+    return { d, color, startAngle, endAngle, key: row.key, label: fundsById.get(row.projId)?.display_name ?? row.projId, weight: row.weight };
   });
+
+  // A boundary sits between arc[i] and arc[(i+1)%n] -- dragging it moves
+  // weight between exactly those two slices, matching M1 Finance's Pie
+  // editor (drag a slice edge, everything else stays put).
+  const boundaries = arcs.map((arc, index) => {
+    const next = arcs[(index + 1) % n];
+    const bx = cx + r * Math.cos((arc.endAngle * Math.PI) / 180);
+    const by = cy + r * Math.sin((arc.endAngle * Math.PI) / 180);
+    return { angle: arc.endAngle, x: bx, y: by, leftIndex: index, rightIndex: (index + 1) % n, minAngle: arc.startAngle, maxAngle: next.endAngle };
+  });
+
+  function angleFromPointer(clientX: number, clientY: number, referenceAngle: number): number {
+    const svg = svgRef.current;
+    if (!svg) return referenceAngle;
+    const rect = svg.getBoundingClientRect();
+    // viewBox is 0 0 120 120 rendered at 120x120, so client px map 1:1 to
+    // svg units once offset by the element's own on-screen position.
+    const x = ((clientX - rect.left) / rect.width) * 120 - cx;
+    const y = ((clientY - rect.top) / rect.height) * 120 - cy;
+    let raw = (Math.atan2(y, x) * 180) / Math.PI;
+    // Normalize into the same continuous [-90, 270) space the arcs use, so
+    // a boundary near the top (the -90/270 wrap point) doesn't jump.
+    while (raw < referenceAngle - 180) raw += 360;
+    while (raw > referenceAngle + 180) raw -= 360;
+    return raw;
+  }
+
+  function applyBoundaryDrag(boundaryIndex: number, clientX: number, clientY: number) {
+    const boundary = boundaries[boundaryIndex];
+    const left = arcs[boundary.leftIndex];
+    const right = arcs[boundary.rightIndex];
+    const minSweep = (MIN_SLICE_WEIGHT / total) * 360;
+    const minAngle = boundary.minAngle + minSweep;
+    const maxAngle = boundary.maxAngle - minSweep;
+    if (minAngle >= maxAngle) return;
+    const pointerAngle = angleFromPointer(clientX, clientY, boundary.angle);
+    const clamped = Math.min(maxAngle, Math.max(minAngle, pointerAngle));
+    const leftWeight = Math.round(((clamped - boundary.minAngle) / 360) * total * 10) / 10;
+    const rightWeight = Math.round(((boundary.maxAngle - clamped) / 360) * total * 10) / 10;
+    onWeightsChange(new Map([[left.key, leftWeight], [right.key, rightWeight]]));
+  }
+
+  useEffect(() => {
+    if (dragBoundary === null) return;
+    function handleMove(event: PointerEvent) {
+      applyBoundaryDrag(dragBoundary!, event.clientX, event.clientY);
+    }
+    function handleUp() {
+      setDragBoundary(null);
+    }
+    window.addEventListener("pointermove", handleMove);
+    window.addEventListener("pointerup", handleUp);
+    return () => {
+      window.removeEventListener("pointermove", handleMove);
+      window.removeEventListener("pointerup", handleUp);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dragBoundary, rows, total]);
+
+  const canDrag = n > 1;
 
   return (
     <div id="allocationBlock">
       <div className="donut-wrap">
-        <svg height="120" viewBox="0 0 120 120" width="120" role="img" aria-label="Allocation donut chart">
-          {arcs.map((arc) => <path d={arc.d} fill={arc.color} key={arc.label} />)}
+        <svg height="120" ref={svgRef} viewBox="0 0 120 120" width="120" role="img" aria-label="Allocation donut chart. Drag a slice edge to rebalance between two funds.">
+          {arcs.map((arc) => <path d={arc.d} fill={arc.color} key={arc.key} />)}
           <circle cx={cx} cy={cy} fill="var(--surface)" r={inner} />
+          {canDrag
+            ? boundaries.map((boundary) => (
+                <circle
+                  className={dragBoundary === boundary.leftIndex ? "donut-handle dragging" : "donut-handle"}
+                  cx={boundary.x}
+                  cy={boundary.y}
+                  key={boundary.leftIndex}
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    (event.target as Element).setPointerCapture?.(event.pointerId);
+                    setDragBoundary(boundary.leftIndex);
+                  }}
+                  r={5}
+                  tabIndex={0}
+                  role="slider"
+                  aria-label={`Boundary between ${arcs[boundary.leftIndex].label} and ${arcs[boundary.rightIndex].label}`}
+                  aria-valuenow={arcs[boundary.leftIndex].weight}
+                  aria-valuemin={MIN_SLICE_WEIGHT}
+                  aria-valuemax={100 - MIN_SLICE_WEIGHT}
+                  onKeyDown={(event) => {
+                    // Keyboard equivalent of the drag, for anyone who can't
+                    // (or doesn't want to) use a pointer -- 1% per press.
+                    const step = event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : 0;
+                    if (!step) return;
+                    event.preventDefault();
+                    const stepAngle = (step / total) * 360;
+                    const minSweep = (MIN_SLICE_WEIGHT / total) * 360;
+                    const clamped = Math.min(boundary.maxAngle - minSweep, Math.max(boundary.minAngle + minSweep, boundary.angle + stepAngle));
+                    const leftWeight = Math.round(((clamped - boundary.minAngle) / 360) * total * 10) / 10;
+                    const rightWeight = Math.round(((boundary.maxAngle - clamped) / 360) * total * 10) / 10;
+                    onWeightsChange(new Map([[arcs[boundary.leftIndex].key, leftWeight], [arcs[boundary.rightIndex].key, rightWeight]]));
+                  }}
+                />
+              ))
+            : null}
         </svg>
         <div className="legend">
           {arcs.map((arc) => (
-            <div className="row" key={arc.label}>
+            <div className="row" key={arc.key}>
               <span className="swatch" style={{ background: arc.color }} />
               {arc.label} &mdash; {formatPct(arc.weight)}
             </div>
           ))}
         </div>
       </div>
+      {canDrag ? <p className="footnote donut-hint">Drag a dot on the chart to shift weight between two neighboring funds.</p> : null}
     </div>
   );
 }
