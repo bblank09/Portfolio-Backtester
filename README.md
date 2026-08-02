@@ -143,6 +143,16 @@ npm --prefix frontend install
 
 Copy `.env.example` to `.env` and set `SEC_API_KEY` only if you need to download or refresh SEC data — running a backtest against the committed local NAV cache does **not** call the SEC API and does not require a key.
 
+### Keeping the cached NAV data fresh (optional)
+
+`.github/workflows/refresh-sec-data.yml` runs daily and re-downloads NAV for the funds in `data/sec/mvp_fund_universe.csv`, then commits the refreshed parquet cache back to `main` — only if the download *and* the full test suite both succeed, so a bad or partial SEC response never gets committed. This is optional: the app works fine off whatever NAV snapshot is already committed, this just keeps it current without anyone running the script by hand.
+
+To enable it on your fork, add these under **Settings → Secrets and variables → Actions**:
+- `SEC_API_KEY` (required)
+- `SEC_API_BASE_URL` (optional — defaults to `https://api.sec.or.th`)
+
+Without `SEC_API_KEY` set, the scheduled run will simply fail every night; delete the workflow file if you don't want that.
+
 ### Docker (recommended for deployment)
 
 The `Dockerfile` builds the frontend and installs the backend in one multi-stage image; FastAPI serves the built static frontend itself, so the whole app is a single container on one port — nothing extra to host or configure CORS for.
