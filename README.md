@@ -60,18 +60,33 @@ _Step 1 of the guided workflow (Portfolio → Objective → Assumptions → Resu
 
 ## 4. System Architecture
 
-```text
-┌─────────────────────┐        ┌──────────────────────────┐        ┌───────────────────────┐
-│   SEC Open Data API  │  ---▶  │  Cache / normalize layer  │  ---▶  │  data/sec/normalized/  │
-│  (fund NAV, profiles)│        │  (backend/app/sec/)       │        │  daily_nav.parquet     │
-└─────────────────────┘        └──────────────────────────┘        └───────────┬───────────┘
-                                                                                  │
-                                                                                  ▼
-┌─────────────────────┐        ┌──────────────────────────┐        ┌───────────────────────┐
-│  React + TS frontend │  ◀--  │  FastAPI REST API         │  ◀---  │  Backtest engine        │
-│  (frontend/src/)      │  ---▶ │  (backend/app/api/)       │  ---▶  │  (backend/app/engine/)  │
-└─────────────────────┘        └──────────────────────────┘        └───────────────────────┘
+```mermaid
+flowchart LR
+    SEC["SEC Open Data API<br/>(fund NAV, profiles)"]
+    SECMOD["backend/app/sec/<br/>fetch + normalize"]
+    CACHE[("data/sec/normalized/<br/>*.parquet cache")]
+    ENGINE["backend/app/engine/<br/>backtest calculations"]
+    API["backend/app/api/<br/>FastAPI REST (/api/v1/*)"]
+    FE["frontend/src/<br/>React + TypeScript UI"]
+    USER(["User's browser"])
+
+    SEC -- "download NAV/profiles\n(scripts/sec_download_mvp.py)" --> SECMOD
+    SECMOD -- "normalize + write" --> CACHE
+    CACHE -- "load_nav_panel()" --> ENGINE
+    API -- "run_backtest(request, nav)" --> ENGINE
+    ENGINE -- "result JSON" --> API
+    USER -- "build portfolio,\nset assumptions" --> FE
+    FE -- "POST /api/backtests\nGET /api/funds, /api/data-status" --> API
+    API -- "result / funds / status JSON" --> FE
+    FE -- "render tabs:\nSummary, Growth, Drawdown,\nReturns, Metrics, Cashflows,\nRebalancing, Report" --> USER
+
+    classDef external fill:#f3effc,stroke:#8b5cf6,color:#3a2a5c;
+    classDef storage fill:#e7f6ee,stroke:#34c98a,color:#123527;
+    class SEC,USER external;
+    class CACHE storage;
 ```
+
+Everything downstream of the parquet cache is a pure function of it: `run_backtest()` never calls the SEC API directly, so a backtest result is always reproducible from `data/sec/normalized/` alone, and the app works fully offline once the cache is populated.
 
 **Tech stack**
 
