@@ -56,17 +56,34 @@ export function BacktestWorkspace() {
     // A shared link carries ?run=<run_id> -- reload that exact persisted
     // run (both the inputs and the result) so opening the link reproduces
     // what was shared, without re-running the backtest.
+    //
+    // React 19 StrictMode double-invokes effects in dev (mount -> cleanup ->
+    // mount), so this fires two overlapping fetches for the same run_id on
+    // every load. Both resolve harmlessly to the same data on their own,
+    // but the `ignore` flag is the standard React-docs pattern for async
+    // effects regardless -- it avoids a stale response from a superseded
+    // invocation ever winning a race against a newer one.
     const runId = new URLSearchParams(window.location.search).get("run");
     if (!runId) return;
+    let ignore = false;
     setLoading(true);
     fetchBacktestByRunId(runId)
       .then((response) => {
+        if (ignore) return;
         setRequest(response.request);
         setResult(response);
         advanceTo(2);
       })
-      .catch((caught: Error) => setError(`Could not load shared run "${runId}": ${caught.message}`))
-      .finally(() => setLoading(false));
+      .catch((caught: Error) => {
+        if (ignore) return;
+        setError(`Could not load shared run "${runId}": ${caught.message}`);
+      })
+      .finally(() => {
+        if (!ignore) setLoading(false);
+      });
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const totalWeight = request.assets.reduce((sum, asset) => sum + asset.weight, 0);

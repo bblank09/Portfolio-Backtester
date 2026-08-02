@@ -198,6 +198,17 @@ npx --prefix frontend tsc -b           # frontend type-check
 
 The backend test suite covers the engine's return calculations, metrics, cashflow/rebalancing logic, the SEC client/normalizer, the report generator, and run reproducibility — not just API smoke tests.
 
+**End-to-end (Playwright)**: exercises the real app in a real browser against the real backend and real cached SEC data — select funds, set assumptions, run, view results.
+
+```bash
+cd frontend
+npm run build              # required: tests run against the production build, not the dev server
+npx playwright install chromium   # first time only
+npm run test:e2e
+```
+
+See item 12's known flaky-test note for the one test that isn't fully stable yet.
+
 ## 11. Example Output
 
 Running a Past Performance backtest on a two-fund equal-weight portfolio (2020-01-31 to 2024-12-31, THB 100,000 initial capital) produces, among other outputs, ending value, TWRR/CAGR, annualized volatility, Sharpe ratio, maximum drawdown, and benchmark excess return — each traceable to its formula in the Report tab. See [`docs/presentation-use-cases-and-workflow.md`](docs/presentation-use-cases-and-workflow.md) for a walked-through example.
@@ -209,10 +220,11 @@ Running a Past Performance backtest on a two-fund equal-weight portfolio (2020-0
 - **No live/real-time data** — the engine reads a locally cached NAV snapshot, refreshed manually via the download workflow.
 - **Scope** — no Monte Carlo simulation, portfolio optimization, efficient frontier, or live broker execution by design.
 - **Single-user, no persistence** — portfolios and results exist only in browser state for the current session; there is no account system or saved-portfolio database yet.
+- **Known flaky E2E test**: `frontend/e2e/happy-path.spec.ts`'s second test ("URL updates with a shareable run id...") intermittently fails under Playwright/headless Chromium automation (roughly 1 in 4–5 runs), even though the feature it tests works correctly — confirmed via manual browser testing, curl, and debug logging showing the app's own state-setting code runs correctly every single time, including in the failing case. Root cause not identified despite extensive investigation (ruled out: Vite dev-server/HMR, React state-batching via `flushSync`, Playwright-locator-specific timing via a direct `waitForFunction` DOM check). `retries: 2` in `playwright.config.ts` mitigates it without masking a real regression, since an actual bug would fail deterministically rather than ~20% of the time. The first test in the same file (the core happy path: select funds → assumptions → run → view results) has never been observed to fail.
 
 ## 13. Roadmap
 
-Planned next (see issues for detail): saved/shareable portfolios, side-by-side multi-portfolio comparison, portfolio templates, and CSV import from broker exports. Contributions and discussion welcome via GitHub Issues.
+Planned next (see issues for detail): side-by-side multi-portfolio comparison, portfolio templates, and CSV import from broker exports. Contributions and discussion welcome via GitHub Issues.
 
 ## 14. License
 
