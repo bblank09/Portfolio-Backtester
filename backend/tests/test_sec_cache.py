@@ -7,6 +7,32 @@ from backend.app.data.quality import (
     load_aligned_nav_returns,
     validate_nav_panel,
 )
+from backend.app.sec import cache as sec_cache
+
+
+def test_load_nav_panel_pushes_proj_id_filter_down_to_parquet_read(monkeypatch, tmp_path):
+    # With the full SEC universe this file will be far too large to load
+    # entirely into memory on every backtest request -- read_parquet must be
+    # told which proj_ids to keep via `filters`, not asked for everything and
+    # filtered in pandas afterward.
+    captured = {}
+
+    def fake_read_parquet(path, filters=None, **kwargs):
+        captured["path"] = path
+        captured["filters"] = filters
+        return pd.DataFrame(
+            {
+                "proj_id": ["FUND_A", "FUND_A"],
+                "nav_date": ["2024-01-31", "2024-02-29"],
+                "nav_per_unit": [10.0, 11.0],
+            }
+        )
+
+    monkeypatch.setattr(pd, "read_parquet", fake_read_parquet)
+
+    sec_cache.load_nav_panel(["FUND_A", "FUND_B"])
+
+    assert captured["filters"] == [("proj_id", "in", ["FUND_A", "FUND_B"])]
 
 
 def test_align_nav_panel_monthly_last_value():

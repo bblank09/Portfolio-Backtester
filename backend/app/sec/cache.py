@@ -21,7 +21,11 @@ def write_manifest(manifest: dict) -> Path:
 
 
 def load_nav_panel(proj_ids: list[str]) -> pd.DataFrame:
-    df = pd.read_parquet(NORMALIZED_DIR / "daily_nav.parquet")
+    # `filters` is pushed down into the parquet read itself (row-group
+    # pruning via pyarrow) so only the requested funds' rows are ever
+    # materialized -- reading the whole file first and filtering in pandas
+    # does not scale once the cache holds the full SEC fund universe.
+    df = pd.read_parquet(NORMALIZED_DIR / "daily_nav.parquet", filters=[("proj_id", "in", proj_ids)])
     panel = df[df["proj_id"].isin(proj_ids)].pivot_table(
         index="nav_date",
         columns="proj_id",
