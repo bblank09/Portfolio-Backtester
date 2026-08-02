@@ -621,19 +621,28 @@ function MonthlyHeatmap({ rows }: { rows: MonthlyGridRow[] }) {
   );
 }
 
-function Histogram({ rows }: { rows: { bin: string; count: number; from: number }[] }) {
+function Histogram({ rows }: { rows: { bin: string; count: number; from: number; to: number }[] }) {
   const maxCount = Math.max(...rows.map((row) => row.count), 1);
   return (
-    <div className="hist" role="img" aria-label={`Monthly return distribution histogram: ${rows.map((row) => `${row.bin}, ${row.count} months`).join("; ")}`}>
-      {rows.map((row) => (
-        <div
-          aria-hidden="true"
-          className={row.from >= 0 ? "histBar histBar-gain" : "histBar histBar-loss"}
-          key={row.bin}
-          style={{ height: `${Math.max(5, (row.count / maxCount) * 92)}px` }}
-          title={`${row.bin}: ${row.count}`}
-        />
-      ))}
+    <div className="histWrap">
+      <div className="histLegend">
+        <span><i className="histSwatch histSwatch-loss" /> Loss months</span>
+        <span><i className="histSwatch histSwatch-gain" /> Gain months</span>
+      </div>
+      <div className="hist" role="img" aria-label={`Monthly return distribution histogram: ${rows.map((row) => `${row.bin}, ${row.count} months`).join("; ")}`}>
+        {rows.map((row) => (
+          <div className="histCol" key={row.bin}>
+            <span aria-hidden="true" className="histCount">{row.count || ""}</span>
+            <div
+              aria-hidden="true"
+              className={row.from >= 0 ? "histBar histBar-gain" : "histBar histBar-loss"}
+              style={{ height: `${Math.max(5, (row.count / maxCount) * 92)}px` }}
+              title={`${row.bin}: ${row.count} month${row.count === 1 ? "" : "s"}`}
+            />
+            <span aria-hidden="true" className="histAxisLabel">{pct.format(row.from)}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

@@ -545,10 +545,20 @@ th { position: sticky; top: 0; background: var(--surface); color: var(--text-ter
 .heatYear { color: var(--text-secondary); font-size: 12px; font-weight: 700; }
 .heatCell { min-height: 26px; border-radius: 4px; color: #fff; display: grid; place-items: center; font-size: 10px; font-weight: 700; overflow: hidden; font-variant-numeric: tabular-nums; }
 
-.hist { display: flex; align-items: end; gap: 4px; min-height: 96px; margin: 12px 0; }
-.histBar { flex: 1; min-height: 5px; border-radius: 3px 3px 0 0; border-top: 2px solid transparent; }
-.histBar-gain { background: #137a4f; border-top-color: #0a4a30; }
-.histBar-loss { background: #b42318; border-top-style: dashed; border-top-color: #6f140e; }
+.histWrap { margin: 12px 0; }
+.histLegend { display: flex; gap: 16px; margin-bottom: 10px; font-size: 12px; font-weight: 600; color: var(--text-secondary); }
+.histLegend span { display: inline-flex; align-items: center; gap: 6px; }
+.histSwatch { display: inline-block; width: 14px; height: 10px; border-radius: 2px; }
+.histSwatch-gain { background: #137a4f; }
+.histSwatch-loss { background: repeating-linear-gradient(135deg, #b42318, #b42318 3px, #7a170f 3px, #7a170f 6px); }
+
+.hist { display: flex; align-items: end; gap: 4px; min-height: 140px; }
+.histCol { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; min-width: 0; }
+.histCount { font-size: 10px; font-weight: 700; color: var(--text-secondary); margin-bottom: 3px; font-variant-numeric: tabular-nums; }
+.histBar { width: 100%; min-height: 5px; border-radius: 3px 3px 0 0; }
+.histBar-gain { background: #137a4f; }
+.histBar-loss { background: repeating-linear-gradient(135deg, #b42318, #b42318 3px, #7a170f 3px, #7a170f 6px); }
+.histAxisLabel { margin-top: 6px; font-size: 9.5px; color: var(--text-tertiary); white-space: nowrap; transform: rotate(-40deg); transform-origin: top center; font-variant-numeric: tabular-nums; }
 
 .correlationMatrix td { text-align: center; font-weight: 650; font-variant-numeric: tabular-nums; min-width: 64px; }
 .correlationMatrix th[scope="row"] { white-space: nowrap; }
