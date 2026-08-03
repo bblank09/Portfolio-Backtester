@@ -4,10 +4,49 @@ import pytest
 from backend.app.data import quality
 from backend.app.data.quality import (
     align_nav_panel,
+    compute_month_coverage,
     load_aligned_nav_returns,
     validate_nav_panel,
 )
 from backend.app.sec import cache as sec_cache
+
+
+def test_compute_month_coverage_reports_full_coverage_for_consecutive_months():
+    dates = pd.to_datetime(["2024-01-15", "2024-02-15", "2024-03-15"])
+
+    coverage = compute_month_coverage(dates)
+
+    assert coverage["nav_start"] == "2024-01-15"
+    assert coverage["nav_end"] == "2024-03-15"
+    assert coverage["nav_months"] == 3
+    assert coverage["nav_span_months"] == 3
+    assert coverage["nav_completeness"] == 1.0
+
+
+def test_compute_month_coverage_flags_a_real_internal_gap():
+    # A fund that reports daily for a few weeks at launch, then switches to
+    # quarterly reporting, has a real long-term gap distinct from just being
+    # a young fund -- span_months (calendar months from first to last
+    # observation) stays large while nav_months (months actually observed)
+    # stays small, so completeness catches it even though nav_start/nav_end
+    # alone would look like a long, healthy history.
+    dates = pd.to_datetime(["2022-10-05", "2022-10-06", "2022-12-30", "2026-06-30"])
+
+    coverage = compute_month_coverage(dates)
+
+    assert coverage["nav_months"] == 3
+    assert coverage["nav_span_months"] == 45
+    assert round(coverage["nav_completeness"], 2) == round(3 / 45, 2)
+
+
+def test_compute_month_coverage_handles_empty_input():
+    coverage = compute_month_coverage(pd.to_datetime([]))
+
+    assert coverage["nav_start"] is None
+    assert coverage["nav_end"] is None
+    assert coverage["nav_months"] == 0
+    assert coverage["nav_span_months"] == 0
+    assert coverage["nav_completeness"] == 0.0
 
 
 def test_load_nav_panel_pushes_proj_id_filter_down_to_parquet_read(monkeypatch, tmp_path):

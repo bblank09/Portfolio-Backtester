@@ -41,6 +41,38 @@ def cap_incomplete_period_label(aligned: pd.DataFrame, source_panel: pd.DataFram
     return capped
 
 
+def compute_month_coverage(dates: pd.DatetimeIndex | pd.Series) -> dict[str, object]:
+    """Summarize how completely a fund's NAV history covers its own span.
+
+    nav_start/nav_end alone can look like a long, healthy history for a
+    fund that only reports NAV a few times a year (e.g. daily for a few
+    weeks at launch, then quarterly forever after) -- span_months (calendar
+    months from first to last observation) stays large while nav_months
+    (months actually observed) stays small, so nav_completeness catches
+    that case even when the date range alone would not.
+    """
+    dates = pd.DatetimeIndex(pd.to_datetime(dates)).dropna()
+    if dates.empty:
+        return {
+            "nav_start": None,
+            "nav_end": None,
+            "nav_months": 0,
+            "nav_span_months": 0,
+            "nav_completeness": 0.0,
+        }
+    start = dates.min()
+    end = dates.max()
+    nav_months = dates.to_period("M").nunique()
+    span_months = (end.year - start.year) * 12 + (end.month - start.month) + 1
+    return {
+        "nav_start": str(start.date()),
+        "nav_end": str(end.date()),
+        "nav_months": int(nav_months),
+        "nav_span_months": int(span_months),
+        "nav_completeness": nav_months / span_months if span_months else 0.0,
+    }
+
+
 def validate_nav_panel(
     panel: pd.DataFrame,
     *,

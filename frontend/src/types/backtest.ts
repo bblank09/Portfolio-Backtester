@@ -25,6 +25,15 @@ export interface SecFund {
   amc_name_th: string;
   amc_name_en: string;
   policy_desc: string;
+  // Real per-fund NAV coverage (scripts/sec_annotate_universe_coverage.py).
+  // nav_completeness < 1 means the fund reports NAV less often than
+  // monthly somewhere in its history (e.g. quarterly after launch) --
+  // distinct from just having a short nav_start..nav_end span.
+  nav_start: string | null;
+  nav_end: string | null;
+  nav_months: number | null;
+  nav_span_months: number | null;
+  nav_completeness: number | null;
 }
 
 export interface CashflowRule {
