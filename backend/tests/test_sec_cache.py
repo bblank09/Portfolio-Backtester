@@ -39,10 +39,47 @@ def test_compute_month_coverage_flags_a_real_internal_gap():
     assert round(coverage["nav_completeness"], 2) == round(3 / 45, 2)
 
 
+def test_compute_month_coverage_reports_no_gap_when_complete():
+    dates = pd.to_datetime(["2024-01-15", "2024-02-15", "2024-03-15"])
+
+    coverage = compute_month_coverage(dates)
+
+    assert coverage["nav_gap_count"] == 0
+    assert coverage["nav_largest_gap_start"] is None
+    assert coverage["nav_largest_gap_end"] is None
+
+
+def test_compute_month_coverage_reports_a_single_gap_precisely():
+    # Mirrors the known SEC-wide 2024 incident: one continuous missing
+    # window inside an otherwise complete history -- should be nameable as
+    # exactly "2024-07 to 2024-10", not just a completeness percentage.
+    dates = pd.to_datetime(["2024-05-15", "2024-06-15", "2024-11-15", "2024-12-15"])
+
+    coverage = compute_month_coverage(dates)
+
+    assert coverage["nav_gap_count"] == 1
+    assert coverage["nav_largest_gap_start"] == "2024-07"
+    assert coverage["nav_largest_gap_end"] == "2024-10"
+
+
+def test_compute_month_coverage_reports_the_largest_of_several_gaps():
+    # A quarterly reporter has many small gaps -- nav_gap_count should
+    # reflect that there are several, and the "largest gap" fields should
+    # point at the biggest one rather than an arbitrary one.
+    dates = pd.to_datetime(["2022-10-05", "2022-10-06", "2022-12-30", "2023-06-30", "2026-06-30"])
+
+    coverage = compute_month_coverage(dates)
+
+    assert coverage["nav_gap_count"] == 3
+    assert coverage["nav_largest_gap_start"] == "2023-07"
+    assert coverage["nav_largest_gap_end"] == "2026-05"
+
+
 def test_compute_month_coverage_handles_empty_input():
     coverage = compute_month_coverage(pd.to_datetime([]))
 
     assert coverage["nav_start"] is None
+    assert coverage["nav_gap_count"] == 0
     assert coverage["nav_end"] is None
     assert coverage["nav_months"] == 0
     assert coverage["nav_span_months"] == 0

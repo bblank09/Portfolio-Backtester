@@ -32,6 +32,23 @@ function categoryLabel(value: string) {
   return CATEGORY_LABELS_EN[value] ?? value;
 }
 
+// Concrete, checkable coverage text instead of an abstract percentage --
+// names the actual gap (matches scripts/sec_annotate_universe_coverage.py's
+// nav_gap_count/nav_largest_gap_start/nav_largest_gap_end) so a user can
+// tell at a glance whether it overlaps their intended backtest window.
+function formatCoverage(fund: SecFund): string | null {
+  if (!fund.nav_start || !fund.nav_end) return null;
+  const range = `${fund.nav_start.slice(0, 7)} to ${fund.nav_end.slice(0, 7)}`;
+  const gapCount = fund.nav_gap_count ?? 0;
+  if (gapCount === 0) return range;
+  if (gapCount === 1 && fund.nav_largest_gap_start && fund.nav_largest_gap_end) {
+    return `${range} · gap ${fund.nav_largest_gap_start} to ${fund.nav_largest_gap_end}`;
+  }
+  const months = fund.nav_months ?? 0;
+  const span = fund.nav_span_months ?? 0;
+  return `${range} · data only ${months}/${span} months (reports infrequently)`;
+}
+
 function buildFacets(funds: SecFund[], field: "amc_name_en" | "policy_desc", otherFilter: Set<string>, otherField: "amc_name_en" | "policy_desc") {
   const counts = new Map<string, number>();
   for (const fund of funds) {
@@ -375,6 +392,7 @@ function HoldingsRow({
           onKeyDown={handleKeyDown}
           autoComplete="off"
         />
+        {fund && formatCoverage(fund) ? <p className="fund-coverage-hint">{formatCoverage(fund)}</p> : null}
         <div className={open ? "fund-suggest open" : "fund-suggest"}>
           {amcFacets.length || categoryFacets.length ? (
             <div className="fund-suggest-filters">
@@ -418,6 +436,7 @@ function HoldingsRow({
               >
                 {item.display_name}
                 <span className="fid">{item.proj_id} &middot; {item.fund_class_name}</span>
+                {formatCoverage(item) ? <span className="coverage">{formatCoverage(item)}</span> : null}
               </button>
             ))}
             {!options.length ? <button disabled type="button">No matching funds</button> : null}

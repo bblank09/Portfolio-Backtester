@@ -263,6 +263,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .fund-suggest button:hover, .fund-suggest button:focus, .fund-suggest button.highlighted { background: var(--accent-soft); }
 .fund-suggest button:disabled { color: var(--text-tertiary); cursor: default; }
 .fund-suggest .fid { display: block; color: var(--text-tertiary); font-size: 11.5px; margin-top: 2px; font-family: ui-monospace, monospace; }
+.fund-suggest .coverage { display: block; color: var(--text-tertiary); font-size: 11px; margin-top: 2px; }
+.fund-coverage-hint { margin: 4px 0 0; font-size: 11.5px; color: var(--text-tertiary); }
 
 .icon-btn {
   border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-sm);

@@ -34,6 +34,9 @@ export interface SecFund {
   nav_months: number | null;
   nav_span_months: number | null;
   nav_completeness: number | null;
+  nav_gap_count: number | null;
+  nav_largest_gap_start: string | null;
+  nav_largest_gap_end: string | null;
 }
 
 export interface CashflowRule {

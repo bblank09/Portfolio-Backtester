@@ -59,17 +59,40 @@ def compute_month_coverage(dates: pd.DatetimeIndex | pd.Series) -> dict[str, obj
             "nav_months": 0,
             "nav_span_months": 0,
             "nav_completeness": 0.0,
+            "nav_gap_count": 0,
+            "nav_largest_gap_start": None,
+            "nav_largest_gap_end": None,
         }
     start = dates.min()
     end = dates.max()
-    nav_months = dates.to_period("M").nunique()
+    observed_periods = dates.to_period("M")
+    nav_months = observed_periods.nunique()
     span_months = (end.year - start.year) * 12 + (end.month - start.month) + 1
+
+    expected_periods = pd.period_range(start.to_period("M"), end.to_period("M"), freq="M")
+    missing_periods = expected_periods.difference(pd.PeriodIndex(observed_periods.unique()))
+
+    # Group consecutive missing months into gap segments (e.g. 2024-07,
+    # 2024-08, 2024-09, 2024-10 -> one segment "2024-07 to 2024-10") so a
+    # single real incident reads as one gap, not four.
+    gap_segments: list[tuple[pd.Period, pd.Period]] = []
+    for period in sorted(missing_periods):
+        if gap_segments and period == gap_segments[-1][1] + 1:
+            gap_segments[-1] = (gap_segments[-1][0], period)
+        else:
+            gap_segments.append((period, period))
+
+    largest_gap = max(gap_segments, key=lambda segment: segment[1].ordinal - segment[0].ordinal) if gap_segments else None
+
     return {
         "nav_start": str(start.date()),
         "nav_end": str(end.date()),
         "nav_months": int(nav_months),
         "nav_span_months": int(span_months),
         "nav_completeness": nav_months / span_months if span_months else 0.0,
+        "nav_gap_count": len(gap_segments),
+        "nav_largest_gap_start": str(largest_gap[0]) if largest_gap else None,
+        "nav_largest_gap_end": str(largest_gap[1]) if largest_gap else None,
     }
 
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Play } from "lucide-react";
 import type { BacktestRequest, SecFund } from "../types/backtest";
 
@@ -15,6 +15,29 @@ interface Props {
   onChange: (request: BacktestRequest) => void;
   onBack: () => void;
   onRun: () => void;
+}
+
+// The global cache spans 2015-2026, but a specific portfolio's own funds
+// (and benchmark) almost never all cover that whole span -- "Max" should
+// mean "the widest range these specific selections can actually run", not
+// "the whole cache's range", or it just walks the user straight into
+// INSUFFICIENT_NAV_HISTORY. Falls back to the global bounds (navStart/
+// navAsOf props) when a selection's coverage isn't known yet.
+function selectedFundsRange(request: BacktestRequest, funds: SecFund[]): { start: string | null; end: string | null } {
+  const projIds = new Set(request.assets.map((asset) => asset.proj_id).filter(Boolean));
+  if (request.benchmark_proj_id) projIds.add(request.benchmark_proj_id);
+  if (!projIds.size) return { start: null, end: null };
+
+  const byId = new Map(funds.map((fund) => [fund.proj_id, fund]));
+  let start: string | null = null;
+  let end: string | null = null;
+  for (const projId of projIds) {
+    const fund = byId.get(projId);
+    if (!fund?.nav_start || !fund.nav_end) return { start: null, end: null };
+    if (!start || fund.nav_start > start) start = fund.nav_start;
+    if (!end || fund.nav_end < end) end = fund.nav_end;
+  }
+  return { start, end };
 }
 
 const RANGE_PRESETS: Array<{ label: string; years: number | "max" }> = [
@@ -44,6 +67,10 @@ export function AssumptionsStep({
   const cashflowLabel = request.cashflow.type === "withdrawal" ? "Withdrawal amount" : "Contribution amount";
   const canRun = validationErrors.length === 0 && !loading;
 
+  const selectedRange = useMemo(() => selectedFundsRange(request, funds), [request, funds]);
+  const effectiveNavStart = selectedRange.start ?? navStart;
+  const effectiveNavAsOf = selectedRange.end ?? navAsOf;
+
   function markTouched(field: string) {
     setTouched((current) => ({ ...current, [field]: true }));
   }
@@ -53,9 +80,9 @@ export function AssumptionsStep({
   }
 
   function applyRangePreset(years: number | "max") {
-    const end = navAsOf ?? request.end_date;
-    const start = years === "max" ? (navStart ?? request.start_date) : shiftYears(end, -years);
-    onChange({ ...request, start_date: navStart && start < navStart ? navStart : start, end_date: end });
+    const end = effectiveNavAsOf ?? request.end_date;
+    const start = years === "max" ? (effectiveNavStart ?? request.start_date) : shiftYears(end, -years);
+    onChange({ ...request, start_date: effectiveNavStart && start < effectiveNavStart ? effectiveNavStart : start, end_date: end });
   }
 
   return (
@@ -85,8 +112,8 @@ export function AssumptionsStep({
             <input
               className="field"
               id="startDate"
-              max={navAsOf ?? undefined}
-              min={navStart ?? undefined}
+              max={effectiveNavAsOf ?? undefined}
+              min={effectiveNavStart ?? undefined}
               onBlur={() => markTouched("startDate")}
               onChange={(event) => onChange({ ...request, start_date: event.target.value })}
               type="date"
@@ -99,8 +126,8 @@ export function AssumptionsStep({
             <input
               className="field"
               id="endDate"
-              max={navAsOf ?? undefined}
-              min={navStart ?? undefined}
+              max={effectiveNavAsOf ?? undefined}
+              min={effectiveNavStart ?? undefined}
               onBlur={() => markTouched("endDate")}
               onChange={(event) => onChange({ ...request, end_date: event.target.value })}
               type="date"
