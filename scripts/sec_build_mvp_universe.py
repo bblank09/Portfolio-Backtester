@@ -8,14 +8,27 @@ from backend.app.sec.normalizers import normalize_fund_class_record, records
 # Checklist 8.8: pull the full SEC fund universe rather than a handful of
 # keyword searches. MAX_FUNDS is bounded (not "all 4,900 Registered funds")
 # because the resulting daily_nav.parquet must stay under GitHub's 100MB
-# single-file limit -- calibrated against a real 15-fund random sample
-# across the full registration-date range (2002-2026): ~2,110 NAV rows/fund
-# average, ~33 bytes/row without the (now-removed, see normalizers.py) raw
-# JSON column, so 800 funds projects to roughly 800 * 2110 * 33 =~ 56MB,
-# leaving comfortable margin below the 100MB hard limit even if the real
-# average runs meaningfully higher than the sample.
-MAX_FUNDS = 800
+# single-file limit. The original 800-fund pull actually landed at ~24MB
+# (~30KB/fund observed, well under the earlier 56MB estimate), so 2,000
+# funds projects to roughly 2000 * 30KB =~ 60MB -- still comfortable margin
+# below the 100MB hard limit even if the real average runs somewhat higher.
+MAX_FUNDS = 2000
 PAGE_SIZE = 100
+
+# AUM ranking (see scripts/sec_fetch_fund_aum.py) so a budget-capped universe
+# keeps the largest/most-popular fund per category instead of whichever the
+# SEC API happened to page first. Missing this file just falls back to the
+# original pagination-order fill -- it's a ranking signal, not a hard
+# dependency of universe selection.
+FUND_AUM_BY_PROJ_ID_PATH = Path("data/sec/fund_aum_by_proj_id.csv")
+
+
+def load_aum_by_proj_id(path: Path = FUND_AUM_BY_PROJ_ID_PATH) -> dict[str, float]:
+    if not path.exists():
+        return {}
+    with path.open(newline="", encoding="utf-8") as f:
+        return {row["proj_id"]: float(row["aum"]) for row in csv.DictReader(f) if row.get("aum")}
+
 
 # These 12 funds are the ones already referenced by the frontend's "Load an
 # example portfolio" shortcut and by several backend tests that pick
@@ -99,7 +112,9 @@ def fetch_all_registered_candidates(client: SecOpenDataClient) -> list[dict]:
     return candidates
 
 
-def select_universe(candidates: list[dict], preferred_proj_ids: list[str], max_funds: int) -> list[dict]:
+def select_universe(
+    candidates: list[dict], preferred_proj_ids: list[str], max_funds: int, aum_by_proj_id: dict[str, float] | None = None
+) -> list[dict]:
     """Pick up to `max_funds` rows from `candidates`.
 
     1. Every proj_id in `preferred_proj_ids` that exists in `candidates`
@@ -108,7 +123,14 @@ def select_universe(candidates: list[dict], preferred_proj_ids: list[str], max_f
        categories (via the `search_term` bucket set above), so a capped
        universe still covers equity/fixed-income/mixed/money-market funds
        instead of whatever order the SEC API happens to page them in.
+       Within each category, candidates are sorted by AUM descending (see
+       scripts/sec_fetch_fund_aum.py) before the round-robin picks them, so
+       the funds that survive a budget cut are the largest/most-popular
+       ones in their category rather than whichever the API paged first.
+       Funds with no resolved AUM sort after every fund with a known AUM,
+       keeping their original relative order.
     """
+    aum_by_proj_id = aum_by_proj_id or {}
     by_proj_id: dict[str, dict] = {}
     for row in candidates:
         by_proj_id.setdefault(row["proj_id"], row)
@@ -129,6 +151,9 @@ def select_universe(candidates: list[dict], preferred_proj_ids: list[str], max_f
         if row["proj_id"] in used:
             continue
         buckets.setdefault(row["search_term"], []).append(row)
+
+    for items in buckets.values():
+        items.sort(key=lambda row: aum_by_proj_id.get(row["proj_id"], -1), reverse=True)
 
     bucket_names = sorted(buckets)
     cursors = dict.fromkeys(bucket_names, 0)
@@ -160,7 +185,8 @@ def main():
     if not candidates:
         raise SystemExit("SEC search returned no normalized fund rows. Revisit Task 2 contract capture and field mapping.")
 
-    rows = select_universe(candidates, PREFERRED_PROJ_IDS, MAX_FUNDS)
+    aum_by_proj_id = load_aum_by_proj_id()
+    rows = select_universe(candidates, PREFERRED_PROJ_IDS, MAX_FUNDS, aum_by_proj_id=aum_by_proj_id)
     if not rows:
         raise SystemExit("Universe selection produced zero rows from a non-empty candidate list -- check select_universe().")
 

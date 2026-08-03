@@ -75,3 +75,27 @@ def test_select_universe_respects_max_funds_even_with_a_larger_candidate_pool():
     selected = select_universe(candidates, preferred_proj_ids=[], max_funds=5)
 
     assert len(selected) == 5
+
+
+def test_select_universe_picks_highest_aum_funds_first_within_each_category():
+    # Within a category, the popularity-ranked fill must take the
+    # highest-AUM candidates first, not whatever order the SEC API paged
+    # them in -- see scripts/sec_fetch_fund_aum.py for how aum_by_proj_id
+    # is produced.
+    candidates = [make_row(f"EQ{i}", "ตราสารทุน") for i in range(5)]
+    aum_by_proj_id = {"EQ0": 10, "EQ1": 500, "EQ2": 100, "EQ3": 50, "EQ4": 1}
+
+    selected = select_universe(candidates, preferred_proj_ids=[], max_funds=3, aum_by_proj_id=aum_by_proj_id)
+
+    assert [row["proj_id"] for row in selected] == ["EQ1", "EQ2", "EQ3"]
+
+
+def test_select_universe_sorts_funds_with_unknown_aum_after_known_aum():
+    candidates = [make_row(f"EQ{i}", "ตราสารทุน") for i in range(4)]
+    # EQ0 and EQ3 have no resolved AUM -- they must fill in only after every
+    # fund with a known AUM, in their original relative order.
+    aum_by_proj_id = {"EQ1": 100, "EQ2": 200}
+
+    selected = select_universe(candidates, preferred_proj_ids=[], max_funds=4, aum_by_proj_id=aum_by_proj_id)
+
+    assert [row["proj_id"] for row in selected] == ["EQ2", "EQ1", "EQ0", "EQ3"]
