@@ -319,9 +319,19 @@ function HoldingsRow({
     const haystack = `${item.proj_id} ${item.display_name} ${item.fund_class_name} ${item.search_term} ${item.amc_name_en} ${item.policy_desc}`.toLowerCase();
     return haystack.includes(query);
   });
-  const visibleOptions = options.slice(0, 8);
+  // Show every match, not just the first few -- the dropdown already has a
+  // fixed max-height with overflow-y: auto (see .fund-suggest in styles.css),
+  // so with 800+ funds in the universe a hard cap here would silently hide
+  // matches the user has no way to scroll to.
+  const visibleOptions = options;
   const listboxId = `${row.key}-listbox`;
   const optionId = (index: number) => `${row.key}-option-${index}`;
+
+  useEffect(() => {
+    if (!open) return;
+    document.getElementById(optionId(highlight))?.scrollIntoView({ block: "nearest" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [highlight, open]);
 
   function handleKeyDown(event: KeyboardEvent<HTMLInputElement>) {
     if (!open) return;
