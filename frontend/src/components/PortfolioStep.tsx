@@ -15,10 +15,17 @@ interface Facet {
   count: number;
 }
 
+// SEC's policy_desc is a Thai-language category label from the API. This
+// map covers every value observed in the full 800-fund universe (checklist
+// 8.8) -- verified against data/sec/mvp_fund_universe.csv, not just the
+// handful of categories the original 12-fund universe happened to have.
 const CATEGORY_LABELS_EN: Record<string, string> = {
   "ตราสารทุน": "Equity",
   "ตราสารหนี้": "Fixed Income",
-  "ผสม": "Mixed"
+  "ผสม": "Mixed",
+  "ทรัพย์สินทางเลือก": "Alternative Assets",
+  "อื่น ๆ": "Other",
+  "ไม่ระบุ เนื่องจากเป็นกองทุนรวมอีทีเอฟแบบ leveraged management หรือ inverse management": "Unspecified (Leveraged/Inverse ETF)"
 };
 
 function categoryLabel(value: string) {
