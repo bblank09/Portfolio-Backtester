@@ -5,10 +5,48 @@ from backend.app.data import quality
 from backend.app.data.quality import (
     align_nav_panel,
     compute_month_coverage,
+    find_longest_complete_window,
     load_aligned_nav_returns,
     validate_nav_panel,
 )
 from backend.app.sec import cache as sec_cache
+
+
+def test_find_longest_complete_window_skips_a_shared_gap():
+    # Mirrors the real 2024-06 to 2024-11 SEC-wide incident: two funds each
+    # individually span the whole range, but the outer intersection of
+    # their nav_start/nav_end still contains a real gap. The longest
+    # continuous fully-complete run is the pre-gap window here (5 months),
+    # tied with the post-gap window (2) -- the earlier/longer one wins.
+    index = pd.PeriodIndex(
+        ["2024-01", "2024-02", "2024-03", "2024-04", "2024-05", "2024-11", "2024-12"], freq="M"
+    ).to_timestamp(how="end").normalize()
+    panel = pd.DataFrame({"A": [1.0] * 7, "B": [1.0] * 7}, index=index)
+
+    window = find_longest_complete_window(panel)
+
+    assert window == ("2024-01-31", "2024-05-31")
+
+
+def test_find_longest_complete_window_excludes_periods_where_any_fund_is_missing():
+    index = pd.PeriodIndex(["2024-01", "2024-02", "2024-03"], freq="M").to_timestamp(how="end").normalize()
+    panel = pd.DataFrame({"A": [1.0, 1.0, 1.0], "B": [1.0, None, 1.0]}, index=index)
+
+    window = find_longest_complete_window(panel)
+
+    # Only single-month runs survive on either side of the missing B value.
+    assert window in {("2024-01-31", "2024-01-31"), ("2024-03-31", "2024-03-31")}
+
+
+def test_find_longest_complete_window_returns_none_when_nothing_overlaps():
+    index = pd.PeriodIndex(["2024-01", "2024-02"], freq="M").to_timestamp(how="end").normalize()
+    panel = pd.DataFrame({"A": [1.0, None], "B": [None, 1.0]}, index=index)
+
+    assert find_longest_complete_window(panel) is None
+
+
+def test_find_longest_complete_window_returns_none_for_empty_panel():
+    assert find_longest_complete_window(pd.DataFrame()) is None
 
 
 def test_compute_month_coverage_reports_full_coverage_for_consecutive_months():

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Play } from "lucide-react";
 import type { BacktestRequest, SecFund } from "../types/backtest";
 
@@ -10,34 +10,19 @@ interface Props {
   validationErrors: string[];
   navStart: string | null;
   navAsOf: string | null;
+  // The longest continuous gap-free window for the currently selected
+  // funds + benchmark, computed server-side (GET /api/funds/testable-range)
+  // with the exact same completeness logic the backtest engine applies.
+  // A client-side "latest nav_start .. earliest nav_end" intersection was
+  // tried first and rejected: it still let "Max" land on a range containing
+  // a real internal gap (e.g. the 2024-06 to 2024-11 SEC-wide incident),
+  // so Max kept producing INSUFFICIENT_NAV_HISTORY.
+  testableRange: { start: string | null; end: string | null };
   error: string;
   loading: boolean;
   onChange: (request: BacktestRequest) => void;
   onBack: () => void;
   onRun: () => void;
-}
-
-// The global cache spans 2015-2026, but a specific portfolio's own funds
-// (and benchmark) almost never all cover that whole span -- "Max" should
-// mean "the widest range these specific selections can actually run", not
-// "the whole cache's range", or it just walks the user straight into
-// INSUFFICIENT_NAV_HISTORY. Falls back to the global bounds (navStart/
-// navAsOf props) when a selection's coverage isn't known yet.
-function selectedFundsRange(request: BacktestRequest, funds: SecFund[]): { start: string | null; end: string | null } {
-  const projIds = new Set(request.assets.map((asset) => asset.proj_id).filter(Boolean));
-  if (request.benchmark_proj_id) projIds.add(request.benchmark_proj_id);
-  if (!projIds.size) return { start: null, end: null };
-
-  const byId = new Map(funds.map((fund) => [fund.proj_id, fund]));
-  let start: string | null = null;
-  let end: string | null = null;
-  for (const projId of projIds) {
-    const fund = byId.get(projId);
-    if (!fund?.nav_start || !fund.nav_end) return { start: null, end: null };
-    if (!start || fund.nav_start > start) start = fund.nav_start;
-    if (!end || fund.nav_end < end) end = fund.nav_end;
-  }
-  return { start, end };
 }
 
 const RANGE_PRESETS: Array<{ label: string; years: number | "max" }> = [
@@ -55,6 +40,7 @@ export function AssumptionsStep({
   validationErrors,
   navStart,
   navAsOf,
+  testableRange,
   error,
   loading,
   onChange,
@@ -67,9 +53,8 @@ export function AssumptionsStep({
   const cashflowLabel = request.cashflow.type === "withdrawal" ? "Withdrawal amount" : "Contribution amount";
   const canRun = validationErrors.length === 0 && !loading;
 
-  const selectedRange = useMemo(() => selectedFundsRange(request, funds), [request, funds]);
-  const effectiveNavStart = selectedRange.start ?? navStart;
-  const effectiveNavAsOf = selectedRange.end ?? navAsOf;
+  const effectiveNavStart = testableRange.start ?? navStart;
+  const effectiveNavAsOf = testableRange.end ?? navAsOf;
 
   function markTouched(field: string) {
     setTouched((current) => ({ ...current, [field]: true }));

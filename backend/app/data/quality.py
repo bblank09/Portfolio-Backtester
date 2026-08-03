@@ -96,6 +96,44 @@ def compute_month_coverage(dates: pd.DatetimeIndex | pd.Series) -> dict[str, obj
     }
 
 
+def find_longest_complete_window(panel: pd.DataFrame, freq: str = "M") -> tuple[str, str] | None:
+    """Find the longest run of *consecutive* periods where every column in
+    `panel` has a value, given an already-aligned (e.g. align_nav_panel)
+    panel.
+
+    A naive "latest nav_start .. earliest nav_end" intersection of several
+    funds' individual ranges can still contain a gap belonging to any one
+    of them (e.g. the 2024-06 to 2024-11 SEC-wide incident, or a quarterly
+    reporter's internal gaps) -- backend/app/engine/backtest.py rejects any
+    such gap inside the requested range, so a caller (e.g. the frontend's
+    "Max" date-range preset) needs the actual longest gap-free window, not
+    just the outer bounds, to reliably avoid INSUFFICIENT_NAV_HISTORY.
+    """
+    if panel.empty or panel.shape[1] == 0:
+        return None
+    complete = panel.dropna(how="any")
+    if complete.empty:
+        return None
+
+    periods = pd.PeriodIndex(complete.index, freq=freq)
+    best_start_idx = best_end_idx = None
+    best_len = 0
+    run_start = 0
+    for i in range(1, len(periods) + 1):
+        boundary = i == len(periods) or periods[i] != periods[i - 1] + 1
+        if not boundary:
+            continue
+        run_len = i - run_start
+        if run_len > best_len:
+            best_len = run_len
+            best_start_idx, best_end_idx = run_start, i - 1
+        run_start = i
+
+    if best_start_idx is None:
+        return None
+    return (str(pd.Timestamp(complete.index[best_start_idx]).date()), str(pd.Timestamp(complete.index[best_end_idx]).date()))
+
+
 def validate_nav_panel(
     panel: pd.DataFrame,
     *,

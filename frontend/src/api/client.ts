@@ -47,6 +47,18 @@ export async function fetchDataStatus(): Promise<DataStatus> {
   return requestJson<DataStatus>("/api/data-status");
 }
 
+// The longest continuous date range where every given fund has a complete
+// monthly NAV observation -- computed server-side with the exact same
+// align/completeness logic the backtest engine applies, since a naive
+// client-side "latest nav_start .. earliest nav_end" intersection can
+// still contain a real gap (e.g. the 2024-06 to 2024-11 SEC-wide
+// incident) that the engine would reject.
+export async function fetchTestableRange(projIds: string[]): Promise<{ start: string | null; end: string | null }> {
+  if (!projIds.length) return { start: null, end: null };
+  const params = new URLSearchParams({ proj_ids: projIds.join(",") });
+  return requestJson<{ start: string | null; end: string | null }>(`/api/funds/testable-range?${params.toString()}`);
+}
+
 export async function fetchBacktestByRunId(runId: string): Promise<BacktestResult> {
   return requestJson<BacktestResult>(`/api/backtests/${encodeURIComponent(runId)}`);
 }

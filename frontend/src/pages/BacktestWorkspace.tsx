@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { fetchBacktestByRunId, fetchDataStatus, fetchFunds, runBacktest } from "../api/client";
+import { useEffect, useMemo, useState } from "react";
+import { fetchBacktestByRunId, fetchDataStatus, fetchFunds, fetchTestableRange, runBacktest } from "../api/client";
 import { AssumptionsStep } from "../components/AssumptionsStep";
 import { PortfolioStep } from "../components/PortfolioStep";
 import { RunOverlay } from "../components/RunOverlay";
@@ -96,6 +96,33 @@ export function BacktestWorkspace() {
   const totalWeight = request.assets.reduce((sum, asset) => sum + asset.weight, 0);
   const fieldErrors = validateRequest(request, totalWeight);
   const validationErrors = Object.values(fieldErrors);
+
+  const selectedProjIds = useMemo(() => {
+    const ids = new Set(request.assets.map((asset) => asset.proj_id).filter(Boolean));
+    if (request.benchmark_proj_id) ids.add(request.benchmark_proj_id);
+    return [...ids].sort();
+  }, [request.assets, request.benchmark_proj_id]);
+
+  const [testableRange, setTestableRange] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
+
+  useEffect(() => {
+    if (!selectedProjIds.length) {
+      setTestableRange({ start: null, end: null });
+      return;
+    }
+    let ignore = false;
+    fetchTestableRange(selectedProjIds)
+      .then((range) => { if (!ignore) setTestableRange(range); })
+      .catch(() => { if (!ignore) setTestableRange({ start: null, end: null }); });
+    return () => {
+      ignore = true;
+    };
+    // selectedProjIds is a derived, order-independent array recomputed from
+    // request.assets/benchmark_proj_id above -- depending on its joined
+    // value (not the array reference) avoids refetching on every keystroke
+    // that doesn't actually change which funds are selected.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProjIds.join(",")]);
 
   function updateRequest(next: BacktestRequest | ((current: BacktestRequest) => BacktestRequest)) {
     setResult(null);
@@ -196,6 +223,7 @@ export function BacktestWorkspace() {
           validationErrors={validationErrors}
           navStart={navStart}
           navAsOf={navAsOf}
+          testableRange={testableRange}
           error={error}
           loading={loading}
           onChange={updateRequest}

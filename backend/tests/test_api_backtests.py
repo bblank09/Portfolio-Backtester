@@ -26,6 +26,29 @@ def test_funds_endpoint_returns_cached_sec_universe():
     assert {"proj_id", "display_name"}.issubset(payload["funds"][0].keys())
 
 
+def test_testable_range_endpoint_finds_the_real_gap_free_window():
+    # K-SET50 (M0209_2548) has the known real 2024-06 to 2024-11 SEC-wide
+    # gap in its actual cached history -- the endpoint must route around
+    # it (return a window entirely before or after it), not just report
+    # the outer nav_start..nav_end bounds that still contain the gap.
+    client = TestClient(app)
+    response = client.get("/api/funds/testable-range", params={"proj_ids": "M0209_2548"})
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["start"] is not None and payload["end"] is not None
+    assert not ("2024-07" <= payload["start"][:7] <= "2024-10") or not ("2024-07" <= payload["end"][:7] <= "2024-10")
+    start, end = pd.Timestamp(payload["start"]), pd.Timestamp(payload["end"])
+    gap_start, gap_end = pd.Timestamp("2024-07-01"), pd.Timestamp("2024-10-31")
+    assert end < gap_start or start > gap_end, f"window {payload} still overlaps the known 2024 gap"
+
+
+def test_testable_range_endpoint_handles_an_unknown_proj_id():
+    client = TestClient(app)
+    response = client.get("/api/funds/testable-range", params={"proj_ids": "NOT_A_REAL_FUND"})
+    assert response.status_code == 200
+    assert response.json() == {"start": None, "end": None}
+
+
 def test_backtest_endpoint_uses_sec_cache_and_persists_run():
     result = create_sample_backtest()
     assert result["data_source"] == "sec_open_data"
