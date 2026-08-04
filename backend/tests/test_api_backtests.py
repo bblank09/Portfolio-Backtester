@@ -78,6 +78,11 @@ def sample_window() -> tuple[str, str, str, str]:
     funds = universe[["proj_id", "display_name"]].drop_duplicates()
     ordered_proj_ids = funds["proj_id"].tolist()
     panel = align_nav_panel(load_nav_panel(ordered_proj_ids)).sort_index()
+    # A universe entry with zero downloaded NAV rows (a fund SEC has no
+    # published NAV for in the requested window at all) never gets a column
+    # in the pivoted panel -- restrict to what the panel actually has so the
+    # pair search below doesn't index a proj_id that isn't there.
+    ordered_proj_ids = [proj_id for proj_id in ordered_proj_ids if proj_id in panel.columns]
     best: tuple[int, pd.Timestamp, str, str, pd.Timestamp, pd.Timestamp] | None = None
 
     for first_index, first_proj_id in enumerate(ordered_proj_ids):
