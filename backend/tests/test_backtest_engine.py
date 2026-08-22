@@ -29,6 +29,7 @@ def backtest_request(
     cashflow_type="contribution",
     cashflow_amount=100,
     frequency="monthly",
+    data_frequency="monthly",
     end_date="2020-03-31",
 ):
     return BacktestRequest(
@@ -49,7 +50,7 @@ def backtest_request(
         },
         rebalancing={"mode": "none"},
         costs={"transaction_bps": 0, "slippage_bps": 0, "annual_drag_pct": 0},
-        data={"source": "sec_open_data", "price_field": "nav_per_unit"},
+        data={"source": "sec_open_data", "price_field": "nav_per_unit", "frequency": data_frequency},
     )
 
 
@@ -305,3 +306,52 @@ def test_cashflow_frequency_uses_expected_period_schedule(frequency, periods, ex
     assert [row["date"] for row in result["cashflows"]] == [
         dates[position].date().isoformat() for position in expected_positions
     ]
+
+
+@pytest.mark.parametrize(
+    ("frequency", "expected_dates"),
+    [
+        ("monthly", ["2024-02-29", "2024-03-29", "2024-04-30"]),
+        ("quarterly", ["2024-04-30"]),
+    ],
+)
+def test_daily_cashflow_frequency_uses_calendar_period_end_dates(frequency, expected_dates):
+    dates = pd.bdate_range("2024-01-02", "2024-04-30")
+    nav = pd.DataFrame({"FUND_A": 10.0, "FUND_B": 20.0}, index=dates)
+    request = backtest_request(
+        frequency=frequency,
+        data_frequency="daily",
+        end_date=dates[-1].date().isoformat(),
+    )
+
+    result = run_backtest(request, nav)
+
+    assert [row["date"] for row in result["cashflows"]] == expected_dates
+
+
+def test_daily_beginning_cashflow_uses_first_observation_of_next_period():
+    dates = pd.bdate_range("2024-01-02", "2024-03-29")
+    nav = pd.DataFrame({"FUND_A": 10.0, "FUND_B": 20.0}, index=dates)
+    request = backtest_request(
+        timing="beginning",
+        data_frequency="daily",
+        end_date=dates[-1].date().isoformat(),
+    )
+
+    result = run_backtest(request, nav)
+
+    assert [row["date"] for row in result["cashflows"]] == ["2024-02-01", "2024-03-01"]
+
+
+def test_daily_annual_cashflow_uses_the_same_calendar_month_after_one_year():
+    dates = pd.bdate_range("2024-01-02", "2025-01-02")
+    nav = pd.DataFrame({"FUND_A": 10.0, "FUND_B": 20.0}, index=dates)
+    request = backtest_request(
+        frequency="annual",
+        data_frequency="daily",
+        end_date=dates[-1].date().isoformat(),
+    )
+
+    result = run_backtest(request, nav)
+
+    assert [row["date"] for row in result["cashflows"]] == ["2025-01-02"]

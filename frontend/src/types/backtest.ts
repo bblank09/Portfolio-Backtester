@@ -2,6 +2,7 @@ export type Frequency = "monthly" | "quarterly" | "annual";
 export type CashflowType = "contribution" | "withdrawal";
 export type CashflowTiming = "beginning" | "end";
 export type RebalanceMode = "none" | "monthly" | "quarterly" | "annual" | "threshold";
+export type Objective = "past_performance" | "monthly_dca" | "monthly_withdrawal" | "rebalancing_impact";
 
 export interface SecFundAllocation {
   proj_id: string;
@@ -37,6 +38,11 @@ export interface SecFund {
   nav_gap_count: number | null;
   nav_largest_gap_start: string | null;
   nav_largest_gap_end: string | null;
+  has_nav_history?: boolean;
+}
+
+export function hasCachedNavHistory(fund: SecFund): boolean {
+  return fund.has_nav_history ?? Boolean(fund.nav_start && fund.nav_end && (fund.nav_months ?? 0) > 0);
 }
 
 export interface CashflowRule {
@@ -65,6 +71,7 @@ export interface DataAssumptions {
 }
 
 export interface BacktestRequest {
+  objective: Objective;
   assets: SecFundAllocation[];
   start_date: string;
   end_date: string;
@@ -79,6 +86,7 @@ export interface BacktestRequest {
 
 export interface MetricSummary {
   ending_value: number;
+  twrr: number;
   irr: number | null;
   twrr_cagr: number;
   volatility: number;
@@ -89,6 +97,23 @@ export interface MetricSummary {
   var_99: number | null;
   max_drawdown: number;
   benchmark_excess_return: number | null;
+}
+
+export interface RebalancingComparison {
+  baseline_summary: MetricSummary & {
+    cashflow_count: number;
+    rebalance_count: number;
+    total_contributed: number;
+    total_withdrawn: number;
+    total_costs: number;
+  };
+  deltas: {
+    ending_value: number;
+    twrr: number;
+    twrr_cagr: number;
+    max_drawdown: number;
+    total_costs: number;
+  };
 }
 
 export interface TimeSeriesPoint {
@@ -125,11 +150,13 @@ export interface BacktestResult {
   drawdown_curve: TimeSeriesPoint[];
   cashflows: { date: string; amount: number }[];
   rebalances: { date: string; turnover: number; cost: number }[];
-  monthly_returns: TableSection;
+  period_returns?: TableSection;
+  monthly_returns?: TableSection;
   annual_returns: TableSection;
   risk_metrics: TableSection;
   diversification: TableSection;
   rolling_correlation: { date: string; asset_a: string; asset_b: string; correlation: number | null }[];
   asset_metrics: TableSection;
   quality_issues: QualityIssue[];
+  rebalancing_comparison?: RebalancingComparison;
 }

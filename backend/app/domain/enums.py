@@ -38,6 +38,13 @@ class AlignmentFrequency(StrEnum):
     daily = "daily"
 
 
+class Objective(StrEnum):
+    past_performance = "past_performance"
+    monthly_dca = "monthly_dca"
+    monthly_withdrawal = "monthly_withdrawal"
+    rebalancing_impact = "rebalancing_impact"
+
+
 class ErrorCode(StrEnum):
     """Stable machine-readable codes, paired with the existing human-readable
     `detail` message, so a deployer's monitoring/alerting can branch on error
@@ -46,6 +53,7 @@ class ErrorCode(StrEnum):
     UNSUPPORTED_DATA_SOURCE = "UNSUPPORTED_DATA_SOURCE"
     NAV_CACHE_MISSING = "NAV_CACHE_MISSING"
     FUND_UNIVERSE_CACHE_MISSING = "FUND_UNIVERSE_CACHE_MISSING"
+    FUND_NOT_FOUND = "FUND_NOT_FOUND"
     INSUFFICIENT_NAV_HISTORY = "INSUFFICIENT_NAV_HISTORY"
     RUN_NOT_FOUND = "RUN_NOT_FOUND"
     VALIDATION_ERROR = "VALIDATION_ERROR"

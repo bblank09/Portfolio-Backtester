@@ -1046,6 +1046,33 @@ def test_daily_frequency_does_not_flag_weekends_as_missing_data():
     assert result["summary"]["ending_value"] == pytest.approx(1000.0 * 103.0 / 100.0)
 
 
+def test_daily_frequency_accepts_market_holidays_from_the_sec_calendar():
+    dates = pd.to_datetime(["2024-04-03", "2024-04-04", "2024-04-05", "2024-04-09"])
+    nav = nav_frame({"FUND_A": [100.0, 101.0, 102.0, 103.0]}, dates)
+    sec_calendar = pd.to_datetime(["2024-04-03", "2024-04-04", "2024-04-05", "2024-04-09"])
+
+    result = run_backtest(
+        make_request(start_date="2024-04-03", end_date="2024-04-09", frequency="daily"),
+        nav,
+        calendar_index=sec_calendar,
+    )
+
+    assert result["summary"]["ending_value"] == pytest.approx(1000.0 * 103.0 / 100.0)
+
+
+def test_daily_frequency_still_flags_a_gap_inside_the_sec_calendar():
+    dates = pd.to_datetime(["2024-04-03", "2024-04-05", "2024-04-09"])
+    nav = nav_frame({"FUND_A": [100.0, 101.0, 103.0]}, dates)
+    sec_calendar = pd.to_datetime(["2024-04-03", "2024-04-04", "2024-04-05", "2024-04-09"])
+
+    with pytest.raises(ValueError, match="2024-04-04"):
+        run_backtest(
+            make_request(start_date="2024-04-03", end_date="2024-04-09", frequency="daily"),
+            nav,
+            calendar_index=sec_calendar,
+        )
+
+
 def test_daily_frequency_still_flags_a_genuine_weekday_gap():
     # A business day (Wed 2024-01-03) is missing entirely from the panel --
     # this is a real data gap, not a weekend, and must still be rejected.

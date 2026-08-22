@@ -149,6 +149,69 @@ def test_load_nav_panel_pushes_proj_id_filter_down_to_parquet_read(monkeypatch, 
     assert captured["filters"] == [("proj_id", "in", ["FUND_A", "FUND_B"])]
 
 
+def test_load_nav_panel_rejects_conflicting_duplicate_nav_keys(monkeypatch):
+    def fake_read_parquet(path, filters=None, **kwargs):
+        return pd.DataFrame(
+            {
+                "proj_id": ["FUND_A", "FUND_A"],
+                "nav_date": ["2024-01-31", "2024-01-31"],
+                "nav_per_unit": [10.0, 11.0],
+            }
+        )
+
+    monkeypatch.setattr(pd, "read_parquet", fake_read_parquet)
+
+    with pytest.raises(ValueError, match="Conflicting duplicate NAV keys"):
+        sec_cache.load_nav_panel(["FUND_A"])
+
+
+def test_load_nav_calendar_refreshes_after_nav_cache_rewrite(monkeypatch, tmp_path):
+    monkeypatch.setattr(sec_cache, "NORMALIZED_DIR", tmp_path)
+    sec_cache.write_parquet(
+        "daily_nav",
+        [{"proj_id": "FUND_A", "nav_date": "2024-01-02", "nav_per_unit": 10.0}],
+    )
+    first = sec_cache.load_nav_calendar()
+
+    sec_cache.write_parquet(
+        "daily_nav",
+        [{"proj_id": "FUND_A", "nav_date": "2024-01-03", "nav_per_unit": 10.0}],
+    )
+    second = sec_cache.load_nav_calendar()
+
+    assert list(first.strftime("%Y-%m-%d")) == ["2024-01-02"]
+    assert list(second.strftime("%Y-%m-%d")) == ["2024-01-03"]
+
+
+def test_complete_sec_calendar_keeps_short_closures_out_of_expected_sessions():
+    observed = pd.to_datetime(["2024-04-03", "2024-04-05", "2024-04-09"])
+
+    calendar = sec_cache.complete_sec_calendar(observed)
+
+    assert list(calendar.strftime("%Y-%m-%d")) == ["2024-04-03", "2024-04-05", "2024-04-09"]
+
+
+def test_complete_sec_calendar_preserves_a_long_outage_as_missing_sessions():
+    observed = pd.to_datetime(["2024-06-26", "2024-09-02"])
+
+    calendar = sec_cache.complete_sec_calendar(observed)
+
+    assert pd.Timestamp("2024-07-01") in calendar
+    assert pd.Timestamp("2024-08-30") in calendar
+
+
+def test_find_longest_complete_daily_window_uses_the_supplied_session_calendar():
+    calendar = pd.to_datetime(["2024-04-03", "2024-04-04", "2024-04-05", "2024-04-09"])
+    panel = pd.DataFrame(
+        {"A": [1.0, 2.0, 3.0], "B": [1.0, 2.0, 3.0]},
+        index=pd.to_datetime(["2024-04-03", "2024-04-05", "2024-04-09"]),
+    )
+
+    window = find_longest_complete_window(panel, freq="D", calendar_index=calendar)
+
+    assert window == ("2024-04-05", "2024-04-09")
+
+
 def test_migrate_schema_adds_missing_columns_with_defaults(monkeypatch, tmp_path):
     # Pulling the full SEC universe (checklist 8.8) needs new columns on
     # fund_classes (e.g. fund_status, cancel_date, for survivorship-bias

@@ -1,17 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { fetchBacktestByRunId, fetchDataStatus, fetchFunds, fetchTestableRange, runBacktest } from "../api/client";
 import { AssumptionsStep } from "../components/AssumptionsStep";
+import DarkVeil from "../components/DarkVeil";
 import { PortfolioStep } from "../components/PortfolioStep";
 import { RunOverlay } from "../components/RunOverlay";
 import { RunSummary } from "../components/RunSummary";
 import { Stepper } from "../components/Stepper";
+import { hasCachedNavHistory } from "../types/backtest";
 import type { BacktestRequest, BacktestResult, SecFund, SecFundAllocation } from "../types/backtest";
 
 const initialRequest: BacktestRequest = {
+  objective: "past_performance",
   assets: [],
   start_date: "2020-01-31",
   end_date: "2024-06-30",
-  initial_capital: 100000,
+  initial_capital: 100_000,
   benchmark_proj_id: "",
   risk_free_rate_pct: 0,
   cashflow: { enabled: false, type: "contribution", amount: 0, frequency: "monthly", timing: "end" },
@@ -94,7 +97,7 @@ export function BacktestWorkspace() {
   }, []);
 
   const totalWeight = request.assets.reduce((sum, asset) => sum + asset.weight, 0);
-  const fieldErrors = validateRequest(request, totalWeight);
+  const fieldErrors = validateRequest(request, totalWeight, funds);
   const validationErrors = Object.values(fieldErrors);
 
   const selectedProjIds = useMemo(() => {
@@ -111,7 +114,7 @@ export function BacktestWorkspace() {
       return;
     }
     let ignore = false;
-    fetchTestableRange(selectedProjIds)
+    fetchTestableRange(selectedProjIds, request.data.frequency)
       .then((range) => { if (!ignore) setTestableRange(range); })
       .catch(() => { if (!ignore) setTestableRange({ start: null, end: null }); });
     return () => {
@@ -122,7 +125,7 @@ export function BacktestWorkspace() {
     // value (not the array reference) avoids refetching on every keystroke
     // that doesn't actually change which funds are selected.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedProjIds.join(",")]);
+  }, [selectedProjIds.join(","), request.data.frequency]);
 
   function updateRequest(next: BacktestRequest | ((current: BacktestRequest) => BacktestRequest)) {
     setResult(null);
@@ -194,7 +197,11 @@ export function BacktestWorkspace() {
   }
 
   return (
-    <div className="shell">
+    <>
+      <div className="app-veil" aria-hidden="true">
+        <DarkVeil hueShift={342} speed={1.5} scanlineFrequency={0.5} noiseIntensity={0} scanlineIntensity={0} warpAmount={0} />
+      </div>
+      <div className="shell">
       <header className="topbar">
         <div className="brand">
           <img alt="Portfolio Backtester" className="mark" src="/brand/topbar-mark.png" />
@@ -253,7 +260,8 @@ export function BacktestWorkspace() {
       </footer>
 
       <RunOverlay open={loading} />
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -263,16 +271,18 @@ function formatNavDate(isoDate: string): string {
   return parsed.toLocaleDateString("en-US", { year: "numeric", month: "short", day: "numeric", timeZone: "UTC" });
 }
 
-function validateRequest(request: BacktestRequest, totalWeight: number): Record<string, string> {
+function validateRequest(request: BacktestRequest, totalWeight: number, funds: SecFund[]): Record<string, string> {
   const errors: Record<string, string> = {};
   if (!request.assets.length) errors.assets = "Add at least one SEC fund.";
   if (Math.abs(totalWeight - 100) > 0.01) errors.assets = `Weights sum to ${totalWeight.toFixed(1)}%, not 100%.`;
   if (!request.benchmark_proj_id) errors.benchmark = "Select a benchmark SEC fund.";
+  const benchmark = funds.find((fund) => fund.proj_id === request.benchmark_proj_id);
+  if (benchmark && !hasCachedNavHistory(benchmark)) errors.benchmark = "Selected benchmark has no cached NAV history.";
   if (new Date(request.start_date) >= new Date(request.end_date)) {
     errors.endDate = "Start date must be before end date.";
   }
-  if (!(request.initial_capital > 0)) errors.initialCapital = "Initial capital must be greater than zero.";
-  if (request.cashflow.enabled && !(request.cashflow.amount > 0)) {
+  if (!Number.isFinite(request.initial_capital) || !(request.initial_capital > 0)) errors.initialCapital = "Initial capital must be a finite value greater than zero.";
+  if (request.cashflow.enabled && (!Number.isFinite(request.cashflow.amount) || !(request.cashflow.amount > 0))) {
     errors.cashflowAmount = "Cashflow amount must be greater than zero when cashflow is enabled.";
   }
   return errors;

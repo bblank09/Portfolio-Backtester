@@ -17,6 +17,10 @@ It does not remove the full analysis. These always appear after every run:
 - Diversification Check
 - CQF Report
 
+Selecting an objective reapplies its documented preset values for initial
+capital, cashflow, rebalancing, and costs. Dates, portfolio weights,
+benchmark, risk-free rate, and NAV frequency remain editable inputs.
+
 ## Objectives
 
 ### Past Performance
@@ -28,9 +32,10 @@ Auto-fill:
 - Cashflow: off
 - Rebalancing: annual
 - Benchmark: selected SEC fund `proj_id`
-- Initial capital: 10,000
+- Initial capital: 100,000 THB
 - Transaction cost: 0 bps
 - Slippage: 0 bps
+- Rebalancing threshold: 5%
 
 Required:
 
@@ -51,7 +56,12 @@ Auto-fill:
 - Cashflow: contribution
 - Amount: 500/month
 - Timing: period-end
+- Initial capital: 100,000 THB
 - Rebalancing: annual
+- Rebalancing threshold: 5%
+- Transaction cost: 0 bps
+- Slippage: 0 bps
+- Annual drag: 0%
 - Benchmark: selected SEC fund `proj_id`
 
 Required:
@@ -61,6 +71,7 @@ Required:
 - Start date
 - End date
 - Initial capital
+- Benchmark
 
 Summary focuses on total contributed, ending value, net profit, MWRR/IRR, TWRR CAGR, and benchmark excess return.
 
@@ -73,8 +84,12 @@ Auto-fill:
 - Cashflow: withdrawal
 - Amount: 1,000/month
 - Timing: period-end
-- Initial capital: 100,000
+- Initial capital: 100,000 THB
 - Rebalancing: annual
+- Rebalancing threshold: 5%
+- Transaction cost: 0 bps
+- Slippage: 0 bps
+- Annual drag: 0%
 - Benchmark: selected SEC fund `proj_id`
 
 Required:
@@ -84,6 +99,7 @@ Required:
 - Start date
 - End date
 - Starting capital
+- Benchmark
 
 Summary focuses on total withdrawn, ending value, portfolio survived/depleted status, max drawdown, MWRR/IRR, and Ulcer Index.
 
@@ -94,9 +110,12 @@ Use when the user asks: "Did rebalancing help after turnover and costs?"
 Auto-fill:
 
 - Cashflow: off
+- Initial capital: 100,000 THB
 - Rebalancing: annual
+- Rebalancing threshold: 5%
 - Transaction cost: 5 bps
 - Slippage: 0 bps
+- Annual drag: 0%
 - Benchmark: selected SEC fund `proj_id`
 
 Required:
@@ -105,8 +124,12 @@ Required:
 - Start date
 - End date
 - Rebalancing mode
+- Initial capital
+- Benchmark
 
-Summary focuses on rebalance count, average turnover, cost drag, ending value, max drawdown, and Sharpe ratio.
+Summary focuses on rebalance count, average turnover, cost drag, ending value,
+max drawdown, and Sharpe ratio, with a side-by-side no-rebalancing baseline
+and deltas for ending value, TWRR, CAGR, drawdown, and total costs.
 
 ## Future Objective Candidates
 

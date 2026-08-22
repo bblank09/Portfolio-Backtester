@@ -15,7 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from backend.app.data.quality import align_nav_panel
 from backend.app.domain.schemas import BacktestRequest
 from backend.app.engine.backtest import run_backtest
-from backend.app.sec.cache import load_nav_panel
+from backend.app.sec.cache import load_nav_calendar, load_nav_panel
 
 SUMMARY_KEYS = [
     "ending_value",
@@ -59,8 +59,16 @@ def verify_run_reproducibility(run_id: str) -> dict[str, Any]:
     request = BacktestRequest(**request_payload)
     proj_ids = sorted({asset.proj_id for asset in request.assets} | {request.benchmark_proj_id})
     with project_root_working_directory():
-        nav = align_nav_panel(load_nav_panel(proj_ids))
-    recomputed = run_backtest(request, nav)
+        if request.data.frequency == "daily":
+            nav = align_nav_panel(load_nav_panel(proj_ids), frequency="daily")
+            calendar_index = load_nav_calendar()
+        else:
+            nav = align_nav_panel(load_nav_panel(proj_ids))
+            calendar_index = None
+    if request.data.frequency == "daily":
+        recomputed = run_backtest(request, nav, calendar_index=calendar_index)
+    else:
+        recomputed = run_backtest(request, nav)
     stored_summary_value = stored_result.get("summary")
     recomputed_summary_value = recomputed.get("summary")
     stored_summary = stored_summary_value if isinstance(stored_summary_value, dict) else {}

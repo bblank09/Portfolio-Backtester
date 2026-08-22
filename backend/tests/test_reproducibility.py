@@ -88,3 +88,46 @@ def test_verifier_fails_when_a_saved_summary_key_is_missing(tmp_path, monkeypatc
 
 def test_verifier_allows_an_explicitly_null_metric_on_both_sides():
     assert verifier.diff_value(None, None)["match"] is True
+
+
+def test_verifier_aligns_daily_runs_with_the_daily_calendar(tmp_path, monkeypatch):
+    run_id = "saved-daily-run"
+    run_dir = tmp_path / run_id
+    run_dir.mkdir()
+    request = BacktestRequest(
+        assets=[{"proj_id": "FUND_A", "display_name": "Fund A", "weight": 100}],
+        start_date="2024-04-03",
+        end_date="2024-04-09",
+        initial_capital=1000,
+        benchmark_proj_id="FUND_A",
+        cashflow={"enabled": False, "type": "contribution", "amount": 0, "frequency": "monthly", "timing": "end"},
+        rebalancing={"mode": "none"},
+        costs={"transaction_bps": 0, "slippage_bps": 0, "annual_drag_pct": 0},
+        data={"source": "sec_open_data", "price_field": "nav_per_unit", "frequency": "daily"},
+    )
+    stored_summary = {key: 0 for key in verifier.SUMMARY_KEYS}
+    (run_dir / "request.json").write_text(json.dumps(request.model_dump(mode="json")), encoding="utf-8")
+    (run_dir / "result.json").write_text(json.dumps({"summary": stored_summary}), encoding="utf-8")
+
+    calls = {}
+    calendar = pd.to_datetime(["2024-04-03", "2024-04-05", "2024-04-09"])
+    monkeypatch.setattr(verifier, "RUNS_DIR", tmp_path)
+    monkeypatch.setattr(verifier, "load_nav_panel", lambda proj_ids: pd.DataFrame({"FUND_A": [10, 10, 10]}))
+    monkeypatch.setattr(verifier, "load_nav_calendar", lambda: calendar, raising=False)
+
+    def align(panel, *, frequency):
+        calls["frequency"] = frequency
+        return panel
+
+    def run(request, nav, *, calendar_index=None):
+        calls["calendar_index"] = calendar_index
+        return {"summary": stored_summary}
+
+    monkeypatch.setattr(verifier, "align_nav_panel", align)
+    monkeypatch.setattr(verifier, "run_backtest", run)
+
+    result = verifier.verify_run_reproducibility(run_id)
+
+    assert result["ok"] is True
+    assert calls["frequency"] == "daily"
+    assert calls["calendar_index"].equals(calendar)

@@ -14,11 +14,16 @@ from fastapi.responses import PlainTextResponse
 from backend.app.core.errors import AppHTTPException
 from backend.app.core.limiter import limiter
 from backend.app.data.quality import align_nav_panel, validate_nav_panel
-from backend.app.domain.enums import ErrorCode
-from backend.app.domain.schemas import BacktestRequest
+from backend.app.domain.enums import ErrorCode, Objective, RebalanceMode
+from backend.app.domain.schemas import BacktestRequest, BacktestResult
 from backend.app.engine.backtest import run_backtest
-from backend.app.reports.artifacts import write_research_report
-from backend.app.sec.cache import load_nav_panel
+from backend.app.reports.artifacts import (
+    load_sec_manifest,
+    safe_run_dir,
+    write_research_report,
+    write_run_snapshots,
+)
+from backend.app.sec.cache import load_nav_calendar, load_nav_panel
 
 router = APIRouter(prefix="/backtests", tags=["backtests"])
 RUNS_DIR = Path("data/runs")
@@ -30,7 +35,7 @@ def min_complete_observations_for(frequency: str) -> int:
     return 252 if frequency == "daily" else 12
 
 
-@router.post("")
+@router.post("", response_model=BacktestResult)
 @limiter.limit("10/minute")
 def create_backtest(request: Request, backtest_request: BacktestRequest) -> dict[str, Any]:
     proj_ids = sorted({asset.proj_id for asset in backtest_request.assets} | {backtest_request.benchmark_proj_id})
@@ -49,6 +54,14 @@ def create_backtest(request: Request, backtest_request: BacktestRequest) -> dict
 
         try:
             nav = align_nav_panel(load_nav_panel(proj_ids), frequency=backtest_request.data.frequency)
+            missing_proj_ids = [proj_id for proj_id in proj_ids if proj_id not in nav.columns]
+            if missing_proj_ids:
+                raise AppHTTPException(
+                    status_code=422,
+                    detail=f"No cached SEC NAV history was found for: {missing_proj_ids}.",
+                    code=ErrorCode.FUND_NOT_FOUND,
+                )
+            calendar_index = load_nav_calendar() if backtest_request.data.frequency == "daily" else None
         except FileNotFoundError as exc:
             raise AppHTTPException(
                 status_code=503,
@@ -63,16 +76,37 @@ def create_backtest(request: Request, backtest_request: BacktestRequest) -> dict
             min_complete_observations=min_complete_observations_for(backtest_request.data.frequency),
         )
         try:
-            result = run_backtest(backtest_request, nav)
+            result = run_backtest(backtest_request, nav, calendar_index=calendar_index)
         except ValueError as exc:
             raise AppHTTPException(
                 status_code=422, detail=str(exc), code=ErrorCode.INSUFFICIENT_NAV_HISTORY
             ) from exc
 
+        if backtest_request.objective == Objective.rebalancing_impact:
+            baseline_request = backtest_request.model_copy(deep=True)
+            baseline_request.rebalancing.mode = RebalanceMode.none
+            try:
+                baseline_result = run_backtest(baseline_request, nav, calendar_index=calendar_index)
+            except ValueError as exc:
+                raise AppHTTPException(
+                    status_code=422, detail=str(exc), code=ErrorCode.INSUFFICIENT_NAV_HISTORY
+                ) from exc
+            active_summary = result["summary"]
+            baseline_summary = baseline_result["summary"]
+            comparison_keys = ("ending_value", "twrr", "twrr_cagr", "max_drawdown", "total_costs")
+            result["rebalancing_comparison"] = {
+                "baseline_summary": baseline_summary,
+                "deltas": {
+                    key: float(active_summary[key] - baseline_summary[key])
+                    for key in comparison_keys
+                },
+            }
+
         result["quality_issues"] = quality_issues
         result["run_id"] = make_run_id()
         result["created_at"] = utc_now().isoformat(timespec="seconds").replace("+00:00", "Z")
         result["data_source"] = "sec_open_data"
+        result["request"] = backtest_request.model_dump(mode="json")
         persist_run(result["run_id"], backtest_request, result)
     except Exception:
         # Logged here (with the fund ids that caused it) in addition to
@@ -91,15 +125,16 @@ def create_backtest(request: Request, backtest_request: BacktestRequest) -> dict
     return to_jsonable(result)
 
 
-@router.get("/{run_id}")
+@router.get("/{run_id}", response_model=BacktestResult)
 def get_backtest(run_id: str) -> dict[str, Any]:
     # run_id is used to build a filesystem path -- reject anything that could
     # escape RUNS_DIR (path separators, ".."), rather than trusting a value
     # that arrives from a public URL query param.
-    if run_id != Path(run_id).name or run_id in ("", ".", ".."):
+    try:
+        run_dir = safe_run_dir(run_id, RUNS_DIR)
+    except FileNotFoundError:
         raise AppHTTPException(status_code=404, detail=f"Backtest run not found: {run_id}", code=ErrorCode.RUN_NOT_FOUND)
 
-    run_dir = RUNS_DIR / run_id
     result_path = run_dir / "result.json"
     if not result_path.is_file():
         raise AppHTTPException(status_code=404, detail=f"Backtest run not found: {run_id}", code=ErrorCode.RUN_NOT_FOUND)
@@ -140,6 +175,7 @@ def persist_run(run_id: str, request: BacktestRequest, result: dict[str, Any]) -
         json.dumps(to_jsonable(result), indent=2, ensure_ascii=False, allow_nan=False),
         encoding="utf-8",
     )
+    write_run_snapshots(run_dir, load_sec_manifest())
 
 
 def to_jsonable(value: Any) -> Any:

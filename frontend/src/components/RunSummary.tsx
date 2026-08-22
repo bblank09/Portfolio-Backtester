@@ -10,7 +10,7 @@ interface Props {
 type OutputTab = "Summary" | "Growth" | "Drawdown" | "Returns" | "Metrics" | "Cashflows" | "Rebalancing" | "Report";
 
 const outputTabs: OutputTab[] = ["Summary", "Growth", "Drawdown", "Returns", "Metrics", "Cashflows", "Rebalancing", "Report"];
-const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+const money = new Intl.NumberFormat("th-TH", { style: "currency", currency: "THB", currencyDisplay: "code", maximumFractionDigits: 0 });
 const number = new Intl.NumberFormat("en-US", { maximumFractionDigits: 2 });
 const pct = new Intl.NumberFormat("en-US", { style: "percent", maximumFractionDigits: 2 });
 
@@ -124,6 +124,7 @@ function SummaryTab({ result, setActiveTab }: { result: BacktestResult; setActiv
 function GrowthTab({ result }: { result: BacktestResult }) {
   const netInvested = buildNetInvestedCurve(result);
   const derived = deriveResult(result);
+  const rollingLabel = result.request.data.frequency === "daily" ? "Rolling 1Y" : "Rolling 12M";
   return (
     <div className="tabStack">
       <div className="metricGrid">
@@ -145,15 +146,15 @@ function GrowthTab({ result }: { result: BacktestResult }) {
         <h3>Trailing performance</h3>
         <DataTable caption="Trailing performance" section={{ title: "", rows: derived.trailingReturns }} />
       </section>
-      <AxisCurve title="Rolling 12M return and volatility" series={[
+      <AxisCurve title={`${rollingLabel} return and volatility`} series={[
         { label: "Rolling return", points: derived.rolling.map((row) => ({ date: row.date, value: row.return })), color: "#5b21d6", valueFormat: pct.format },
         { label: "Rolling volatility", points: derived.rolling.map((row) => ({ date: row.date, value: row.volatility })), color: "#0ea5e9", valueFormat: pct.format }
       ]} valueFormat={pct.format} />
       {derived.rolling.some((row) => row.sharpe !== null) ? (
         <section className="chartPanel">
-          <h3>Rolling 12M Sharpe</h3>
-          <p className="summaryText">A point-in-time Sharpe ratio can look good purely by luck of the end date; this tracks how the risk-adjusted return held up across every trailing 12-month window.</p>
-          <AxisCurve title="Rolling 12M Sharpe ratio" series={[
+          <h3>{rollingLabel} Sharpe</h3>
+          <p className="summaryText">A point-in-time Sharpe ratio can look good purely by luck of the end date; this tracks how the risk-adjusted return held up across every trailing one-year window.</p>
+          <AxisCurve title={`${rollingLabel} Sharpe ratio`} series={[
             {
               label: "Rolling Sharpe",
               points: derived.rolling.filter((row) => row.sharpe !== null).map((row) => ({ date: row.date, value: row.sharpe as number })),
@@ -164,8 +165,8 @@ function GrowthTab({ result }: { result: BacktestResult }) {
         </section>
       ) : null}
       <section className="chartPanel">
-        <h3>Rolling 12M table</h3>
-        <DataTable caption="Rolling 12M table" section={{ title: "", rows: derived.rolling }} />
+        <h3>{rollingLabel} table</h3>
+        <DataTable caption={`${rollingLabel} table`} section={{ title: "", rows: derived.rolling }} />
       </section>
     </div>
   );
@@ -203,23 +204,24 @@ function DrawdownTab({ result }: { result: BacktestResult }) {
 
 function ReturnsTab({ result }: { result: BacktestResult }) {
   const derived = deriveResult(result);
+  const periodLabel = result.request.data.frequency === "daily" ? "daily" : "monthly";
   return (
     <div className="tables oneColumn">
       <DataTable section={{ title: "Annual returns", rows: derived.annualReturns }} />
-      <MonthlyHeatmap rows={derived.monthlyGrid} />
+      {result.request.data.frequency === "monthly" ? <MonthlyHeatmap rows={derived.monthlyGrid} /> : null}
       <section className="chartPanel">
-        <h3>Monthly return distribution</h3>
-        <Histogram rows={derived.histogram} />
-        <DataTable caption="Monthly return distribution" compact section={{ title: "", rows: derived.histogram }} />
+        <h3>{periodLabel[0].toUpperCase() + periodLabel.slice(1)} return distribution</h3>
+        <Histogram periodLabel={periodLabel} rows={derived.histogram} />
+        <DataTable caption={`${periodLabel} return distribution`} compact section={{ title: "", rows: derived.histogram }} />
       </section>
       <div className="panelGrid">
         <section className="chartPanel">
-          <h3>Best months</h3>
-          <DataTable caption="Best months" section={{ title: "", rows: derived.bestMonths }} />
+          <h3>Best {periodLabel}s</h3>
+          <DataTable caption={`Best ${periodLabel}s`} section={{ title: "", rows: derived.bestPeriods }} />
         </section>
         <section className="chartPanel">
-          <h3>Worst months</h3>
-          <DataTable caption="Worst months" section={{ title: "", rows: derived.worstMonths }} />
+          <h3>Worst {periodLabel}s</h3>
+          <DataTable caption={`Worst ${periodLabel}s`} section={{ title: "", rows: derived.worstPeriods }} />
         </section>
       </div>
     </div>
@@ -307,6 +309,13 @@ function RebalancingTab({ result }: { result: BacktestResult }) {
           </div>
         ))}
       </section>
+      {result.rebalancing_comparison ? (
+        <section className="chartPanel">
+          <h3>Rebalancing impact</h3>
+          <p className="footnote">Compared with the same portfolio and costs with rebalancing disabled.</p>
+          <DataTable caption="Rebalancing impact versus no rebalancing" section={{ title: "", rows: rebalancingComparisonRows(result) }} />
+        </section>
+      ) : null}
       <DataTable section={{ title: "Rebalance events", rows: result.rebalances.map((row) => ({ ...row, turnover: pct.format(row.turnover), cost: money.format(row.cost) })) }} />
     </div>
   );
@@ -337,7 +346,7 @@ function ReportTab({ result }: { result: BacktestResult }) {
         </ReportSection>
 
         <ReportSection title="2. Data and methodology">
-          <p>All returns are computed from cached SEC Open Data mutual fund NAV series (month-end frequency, {"m"} = 12 periods/year). No mock, simulated, or forecast price series are used. Fund period returns use simple returns r_t = NAV_t / NAV_(t-1) - 1; missing NAV observations are never forward-filled into a fabricated return. Portfolio time-weighted return removes external cashflows using the configured timing so contributions/withdrawals do not themselves create investment return.</p>
+          <p>All returns are computed from cached SEC Open Data mutual fund NAV series ({result.request.data.frequency === "daily" ? "daily business-session frequency, m = 252 periods/year" : "month-end frequency, m = 12 periods/year"}). No mock, simulated, or forecast price series are used. Fund period returns use simple returns r_t = NAV_t / NAV_(t-1) - 1; missing NAV observations are never forward-filled into a fabricated return. Portfolio time-weighted return removes external cashflows using the configured timing so contributions/withdrawals do not themselves create investment return.</p>
         </ReportSection>
 
         <ReportSection title="3. Portfolio specification">
@@ -382,6 +391,12 @@ function ReportTab({ result }: { result: BacktestResult }) {
                 rows: result.rebalances.map((row) => ({ date: row.date, turnover: pct.format(row.turnover), cost: money.format(row.cost) }))
               }}
             />
+          </ReportSection>
+        ) : null}
+
+        {result.rebalancing_comparison ? (
+          <ReportSection title="Rebalancing impact versus no rebalancing">
+            <DataTable caption="Rebalancing impact comparison" compact section={{ title: "", rows: rebalancingComparisonRows(result) }} />
           </ReportSection>
         ) : null}
 
@@ -578,7 +593,7 @@ function DataTable({ section, compact = false, caption }: { section: TableSectio
         <table>
           {resolvedCaption ? <caption className="srOnly">{resolvedCaption}</caption> : null}
           <thead>
-            <tr>{columns.map((column) => <th key={column}>{humanize(column)}</th>)}</tr>
+            <tr>{columns.map((column) => <th key={column} scope="col">{humanize(column)}</th>)}</tr>
           </thead>
           <tbody>
             {rows.map((row, index) => (
@@ -621,15 +636,15 @@ function MonthlyHeatmap({ rows }: { rows: MonthlyGridRow[] }) {
   );
 }
 
-function Histogram({ rows }: { rows: { bin: string; count: number; from: number; to: number }[] }) {
+function Histogram({ rows, periodLabel }: { rows: { bin: string; count: number; from: number; to: number }[]; periodLabel: string }) {
   const maxCount = Math.max(...rows.map((row) => row.count), 1);
   return (
     <div className="histWrap">
       <div className="histLegend">
-        <span><i className="histSwatch histSwatch-loss" /> Loss months</span>
-        <span><i className="histSwatch histSwatch-gain" /> Gain months</span>
+        <span><i className="histSwatch histSwatch-loss" /> Loss {periodLabel}s</span>
+        <span><i className="histSwatch histSwatch-gain" /> Gain {periodLabel}s</span>
       </div>
-      <div className="hist" role="img" aria-label={`Monthly return distribution histogram: ${rows.map((row) => `${row.bin}, ${row.count} months`).join("; ")}`}>
+      <div className="hist" role="img" aria-label={`${periodLabel} return distribution histogram: ${rows.map((row) => `${row.bin}, ${row.count} ${periodLabel}s`).join("; ")}`}>
         {rows.map((row) => (
           <div className="histCol" key={row.bin}>
             <span aria-hidden="true" className="histCount">{row.count || ""}</span>
@@ -637,7 +652,7 @@ function Histogram({ rows }: { rows: { bin: string; count: number; from: number;
               aria-hidden="true"
               className={row.from >= 0 ? "histBar histBar-gain" : "histBar histBar-loss"}
               style={{ height: `${Math.max(5, (row.count / maxCount) * 92)}px` }}
-              title={`${row.bin}: ${row.count} month${row.count === 1 ? "" : "s"}`}
+              title={`${row.bin}: ${row.count} ${periodLabel}${row.count === 1 ? "" : "s"}`}
             />
             <span aria-hidden="true" className="histAxisLabel">{pct.format(row.from)}</span>
           </div>
@@ -665,23 +680,25 @@ function deriveResult(result: BacktestResult) {
   const portfolioReturns = returnsFromCurve(result.equity_curve);
   const benchmarkReturns = returnsFromCurve(result.benchmark_curve);
   const benchmarkReturnsByDate = new Map(benchmarkReturns.map((row) => [row.date, row.value]));
-  const monthlyRows = result.monthly_returns.rows.map((row) => ({
+  const periodSection = result.period_returns ?? result.monthly_returns;
+  const periodRows = (periodSection?.rows ?? []).map((row) => ({
     date: String(row.date),
     portfolio: asNumber(row.return),
     benchmark: benchmarkReturnsByDate.get(String(row.date)) ?? null
   }));
-  const rolling = rollingRows(monthlyRows, result.request.risk_free_rate_pct / 100);
+  const periodsPerYear = periodsPerYearFor(result);
+  const rolling = rollingRows(periodRows, result.request.risk_free_rate_pct / 100, periodsPerYear);
   return {
     portfolioReturns,
     benchmarkReturns,
-    monthlyRows,
-    trailingReturns: trailingRows(monthlyRows),
+    periodRows,
+    trailingReturns: trailingRows(periodRows, periodsPerYear),
     rolling,
-    annualReturns: annualRows(result, monthlyRows),
-    monthlyGrid: monthlyGrid(monthlyRows),
-    histogram: histogramRows(monthlyRows.map((row) => row.portfolio)),
-    bestMonths: [...monthlyRows].sort((a, b) => b.portfolio - a.portfolio).slice(0, 10).map(monthRow),
-    worstMonths: [...monthlyRows].sort((a, b) => a.portfolio - b.portfolio).slice(0, 10).map(monthRow),
+    annualReturns: annualRows(result, periodRows),
+    monthlyGrid: result.request.data.frequency === "monthly" ? monthlyGrid(periodRows) : [],
+    histogram: histogramRows(periodRows.map((row) => row.portfolio)),
+    bestPeriods: [...periodRows].sort((a, b) => b.portfolio - a.portfolio).slice(0, 10).map(monthRow),
+    worstPeriods: [...periodRows].sort((a, b) => a.portfolio - b.portfolio).slice(0, 10).map(monthRow),
     drawdownPeriods: worstDrawdownPeriods(result.drawdown_curve)
   };
 }
@@ -696,43 +713,45 @@ function returnsFromCurve(points: TimeSeriesPoint[]) {
   return rows;
 }
 
-function trailingRows(rows: { date: string; portfolio: number; benchmark: number | null }[]) {
+function trailingRows(rows: { date: string; portfolio: number; benchmark: number | null }[], periodsPerYear: number) {
+  const windows = periodsPerYear === 252
+    ? [{ label: "1Y", periods: 252 }, { label: "3Y", periods: 756 }, { label: "5Y", periods: 1260 }]
+    : [{ label: "1Y", periods: 12 }, { label: "3Y", periods: 36 }, { label: "5Y", periods: 60 }];
   return [
-    { label: "1Y", months: 12 },
-    { label: "3Y", months: 36 },
-    { label: "5Y", months: 60 },
-    { label: "Full", months: rows.length }
+    ...windows,
+    { label: "Full", periods: rows.length }
   ]
-    .filter((window) => window.months > 0 && rows.length >= window.months)
+    .filter((window) => window.periods > 0 && rows.length >= window.periods)
     .map((window) => {
-      const slice = rows.slice(-window.months);
-      const portfolio = annualize(productReturn(slice.map((row) => row.portfolio)), slice.length);
+      const slice = rows.slice(-window.periods);
+      const portfolio = annualize(productReturn(slice.map((row) => row.portfolio)), slice.length, periodsPerYear);
       const benchmarkValues = slice.map((row) => row.benchmark);
       const benchmarkAligned = benchmarkValues.every((value): value is number => value != null);
-      const benchmark = benchmarkAligned ? annualize(productReturn(benchmarkValues), benchmarkValues.length) : null;
+      const benchmark = benchmarkAligned ? annualize(productReturn(benchmarkValues), benchmarkValues.length, periodsPerYear) : null;
       return {
         period: window.label,
         portfolio: pct.format(portfolio),
         benchmark: benchmark == null ? "n/a" : pct.format(benchmark),
         excess: benchmark == null ? "n/a" : pct.format(portfolio - benchmark),
-        volatility: pct.format(std(slice.map((row) => row.portfolio)) * Math.sqrt(12))
+        volatility: pct.format(std(slice.map((row) => row.portfolio)) * Math.sqrt(periodsPerYear))
       };
     });
 }
 
 function rollingRows(
   rows: { date: string; portfolio: number; benchmark: number | null }[],
-  riskFreeRate: number
+  riskFreeRate: number,
+  periodsPerYear: number
 ) {
   const output = [];
-  for (let index = 12; index <= rows.length; index += 1) {
-    const slice = rows.slice(index - 12, index);
+  for (let index = periodsPerYear; index <= rows.length; index += 1) {
+    const slice = rows.slice(index - periodsPerYear, index);
     const portfolioValues = slice.map((row) => row.portfolio);
     const benchmarkValues = slice.map((row) => row.benchmark);
     if (!benchmarkValues.every((value): value is number => value != null)) continue;
     const active = portfolioValues.map((value, i) => value - benchmarkValues[i]);
-    const volatility = std(portfolioValues) * Math.sqrt(12);
-    // A 12-month window IS one year, so the compounded window return is already
+    const volatility = std(portfolioValues) * Math.sqrt(periodsPerYear);
+    // A one-year window is already annualized, so the compounded window return is already
     // the annualized return -- the same geometric, risk-free-adjusted Sharpe the
     // backend reports, rather than an unadjusted arithmetic-mean variant.
     const windowReturn = productReturn(portfolioValues);
@@ -742,16 +761,16 @@ function rollingRows(
       benchmark: productReturn(benchmarkValues),
       volatility,
       sharpe: volatility <= DEGENERACY_TOLERANCE ? null : (windowReturn - riskFreeRate) / volatility,
-      tracking_error: std(active) * Math.sqrt(12)
+      tracking_error: std(active) * Math.sqrt(periodsPerYear)
     });
   }
   return output;
 }
 
-function annualRows(result: BacktestResult, monthlyRows: { date: string; portfolio: number; benchmark: number | null }[]) {
+function annualRows(result: BacktestResult, periodRows: { date: string; portfolio: number; benchmark: number | null }[]) {
   return result.annual_returns.rows.map((row) => {
     const year = Number(row.year);
-    const yearRows = monthlyRows.filter((item) => item.date.startsWith(String(year)));
+    const yearRows = periodRows.filter((item) => item.date.startsWith(String(year)));
     const benchmarkValues = yearRows.map((item) => item.benchmark);
     const benchmarkAligned = yearRows.length > 0 && benchmarkValues.every((value): value is number => value != null);
     const portfolio = asNumber(row.return);
@@ -795,7 +814,7 @@ function histogramRows(values: number[]) {
 }
 
 function worstDrawdownPeriods(points: TimeSeriesPoint[]) {
-  const periods: { peak: string; trough: string; recovery: string; depth: number; months: number }[] = [];
+  const periods: { peak: string; trough: string; recovery: string; depth: number; periods: number }[] = [];
   let start: number | null = null;
   for (let index = 0; index < points.length; index += 1) {
     const value = points[index]?.value ?? 0;
@@ -811,7 +830,7 @@ function worstDrawdownPeriods(points: TimeSeriesPoint[]) {
     trough: row.trough,
     recovery: row.recovery,
     depth: pct.format(row.depth),
-    months: row.months
+    periods: row.periods
   }));
 }
 
@@ -825,7 +844,7 @@ function drawdownPeriod(points: TimeSeriesPoint[], start: number, end: number) {
     trough: points[trough]?.date ?? "",
     recovery: end === points.length - 1 ? "Ongoing" : points[end]?.date ?? "",
     depth: points[trough]?.value ?? 0,
-    months: Math.max(0, end - start)
+    periods: Math.max(0, end - start)
   };
 }
 
@@ -932,6 +951,9 @@ function resultNarrative(result: BacktestResult) {
   if (result.request.rebalancing.mode !== "none") {
     parts.push(`${m.rebalance_count} rebalance events with total modeled costs of ${money.format(m.total_costs)}.`);
   }
+  if (result.request.objective === "rebalancing_impact" && result.rebalancing_comparison) {
+    parts.push(`Versus no rebalancing, the ending-value difference is ${money.format(result.rebalancing_comparison.deltas.ending_value)} and the TWRR difference is ${pct.format(result.rebalancing_comparison.deltas.twrr)}.`);
+  }
   return parts.join(" ");
 }
 
@@ -946,7 +968,11 @@ function resultChecklist(result: BacktestResult) {
     );
   }
   if (result.request.rebalancing.mode !== "none") {
-    rows.push({ question: "How often did the strategy trade?", result: `${m.rebalance_count} events`, evidence_tab: "Rebalancing" });
+    if (result.request.objective === "rebalancing_impact" && result.rebalancing_comparison) {
+      rows.push({ question: "Did rebalancing help after turnover and costs?", result: `Ending value ${money.format(result.rebalancing_comparison.deltas.ending_value)} vs no rebalancing`, evidence_tab: "Rebalancing" });
+    } else {
+      rows.push({ question: "How often did the strategy trade?", result: `${m.rebalance_count} events`, evidence_tab: "Rebalancing" });
+    }
   }
   rows.push(
     { question: "Did allocation outperform benchmark?", result: `Excess ${formatPercentLike(m.benchmark_excess_return)}`, evidence_tab: "Metrics" },
@@ -1069,7 +1095,7 @@ function stressInterpretationRows(result: BacktestResult, derived: ReturnType<ty
   const values = result.equity_curve.map((point) => point.value);
   return [
     { check: "Capital at risk", result: `${money.format(Math.max(...values) - Math.min(...values))} peak-to-trough path range in SEC NAV history` },
-    { check: "Recovery pressure", result: `${derived.drawdownPeriods[0]?.months ?? 0} months in the deepest drawdown period` },
+    { check: "Recovery pressure", result: `${derived.drawdownPeriods[0]?.periods ?? 0} ${result.request.data.frequency === "daily" ? "daily sessions" : "months"} in the deepest drawdown period` },
     { check: "Benchmark stress", result: `Portfolio beta ${formatNumber(findRiskValue(result, "beta"))}; benchmark shocks are translated through historical beta` }
   ];
 }
@@ -1131,6 +1157,18 @@ function monthRow(row: { date: string; portfolio: number; benchmark: number | nu
   };
 }
 
+function rebalancingComparisonRows(result: BacktestResult) {
+  const comparison = result.rebalancing_comparison;
+  if (!comparison) return [];
+  return [
+    { metric: "Ending value", rebalanced: money.format(result.summary.ending_value), no_rebalancing: money.format(comparison.baseline_summary.ending_value), delta: money.format(comparison.deltas.ending_value) },
+    { metric: "TWRR", rebalanced: pct.format(result.summary.twrr), no_rebalancing: pct.format(comparison.baseline_summary.twrr), delta: pct.format(comparison.deltas.twrr) },
+    { metric: "TWRR CAGR", rebalanced: pct.format(result.summary.twrr_cagr), no_rebalancing: pct.format(comparison.baseline_summary.twrr_cagr), delta: pct.format(comparison.deltas.twrr_cagr) },
+    { metric: "Maximum drawdown", rebalanced: pct.format(result.summary.max_drawdown), no_rebalancing: pct.format(comparison.baseline_summary.max_drawdown), delta: pct.format(comparison.deltas.max_drawdown) },
+    { metric: "Total costs", rebalanced: money.format(result.summary.total_costs), no_rebalancing: money.format(comparison.baseline_summary.total_costs), delta: money.format(comparison.deltas.total_costs) }
+  ];
+}
+
 function trailingBenchmarkFull(derived: ReturnType<typeof deriveResult>) {
   const full = derived.trailingReturns.find((row) => row.period === "Full");
   return full?.benchmark ?? "n/a";
@@ -1158,9 +1196,13 @@ function productReturn(values: number[]) {
   return values.reduce((total, value) => total * (1 + value), 1) - 1;
 }
 
-function annualize(totalReturn: number, months: number) {
-  if (!months) return 0;
-  return (1 + totalReturn) ** (12 / months) - 1;
+function annualize(totalReturn: number, periods: number, periodsPerYear: number) {
+  if (!periods) return 0;
+  return (1 + totalReturn) ** (periodsPerYear / periods) - 1;
+}
+
+function periodsPerYearFor(result: BacktestResult) {
+  return result.request.data.frequency === "daily" ? 252 : 12;
 }
 
 function heatColor(value: number) {
@@ -1289,6 +1331,9 @@ function reportMarkdown(result: BacktestResult, derived: ReturnType<typeof deriv
       title: hasCashflow ? "10. Rebalancing analysis" : "9. Rebalancing analysis",
       body: markdownTable(result.rebalances.map((row) => ({ date: row.date, turnover: pct.format(row.turnover), cost: money.format(row.cost) })))
     });
+  }
+  if (result.rebalancing_comparison) {
+    sections.push({ title: "Rebalancing impact versus no rebalancing", body: markdownTable(rebalancingComparisonRows(result)) });
   }
   sections.push({ title: "Formula reference", body: markdownTable(formulaReferenceRows()) });
   sections.push({

@@ -96,7 +96,11 @@ def compute_month_coverage(dates: pd.DatetimeIndex | pd.Series) -> dict[str, obj
     }
 
 
-def find_longest_complete_window(panel: pd.DataFrame, freq: str = "M") -> tuple[str, str] | None:
+def find_longest_complete_window(
+    panel: pd.DataFrame,
+    freq: str = "M",
+    calendar_index: pd.DatetimeIndex | None = None,
+) -> tuple[str, str] | None:
     """Find the longest run of *consecutive* periods where every column in
     `panel` has a value, given an already-aligned (e.g. align_nav_panel)
     panel.
@@ -111,7 +115,15 @@ def find_longest_complete_window(panel: pd.DataFrame, freq: str = "M") -> tuple[
     """
     if panel.empty or panel.shape[1] == 0:
         return None
-    complete = panel.dropna(how="any")
+    sorted_panel = panel.sort_index()
+    if freq == "D" and calendar_index is not None and not sorted_panel.empty:
+        expected = pd.DatetimeIndex(calendar_index).normalize().unique().sort_values()
+        expected = expected[(expected >= sorted_panel.index.min()) & (expected <= sorted_panel.index.max())]
+        complete = sorted_panel.reindex(expected).dropna(how="any")
+        complete_positions = expected.get_indexer(complete.index)
+    else:
+        complete = sorted_panel.dropna(how="any")
+        complete_positions = None
     if complete.empty:
         return None
 
@@ -120,7 +132,13 @@ def find_longest_complete_window(panel: pd.DataFrame, freq: str = "M") -> tuple[
     best_len = 0
     run_start = 0
     for i in range(1, len(periods) + 1):
-        boundary = i == len(periods) or periods[i] != periods[i - 1] + 1
+        boundary = i == len(periods) or (
+            complete_positions is not None
+            and complete_positions[i] != complete_positions[i - 1] + 1
+        ) or (
+            complete_positions is None
+            and periods[i] != periods[i - 1] + 1
+        )
         if not boundary:
             continue
         run_len = i - run_start
@@ -129,7 +147,7 @@ def find_longest_complete_window(panel: pd.DataFrame, freq: str = "M") -> tuple[
             best_start_idx, best_end_idx = run_start, i - 1
         run_start = i
 
-    if best_start_idx is None:
+    if best_start_idx is None or best_end_idx is None:
         return None
     return (str(pd.Timestamp(complete.index[best_start_idx]).date()), str(pd.Timestamp(complete.index[best_end_idx]).date()))
 

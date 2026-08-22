@@ -28,7 +28,12 @@ import json
 
 import pandas as pd
 
-from backend.app.sec.cache import NORMALIZED_DIR, write_manifest, write_parquet
+from backend.app.sec.cache import (
+    NORMALIZED_DIR,
+    deduplicate_nav_frame,
+    write_manifest,
+    write_parquet,
+)
 
 
 def resolve_class_to_keep(fund_class_names: pd.Series, expected_class: str | float) -> str:
@@ -63,7 +68,7 @@ def main():
             fallback_corrections[proj_id] = resolved
 
     keep_mask = nav.apply(lambda row: row["fund_class_name"] == resolved_class_by_proj_id[row["proj_id"]], axis=1)
-    cleaned = nav[keep_mask]
+    cleaned = deduplicate_nav_frame(nav[keep_mask])
 
     after_rows = len(cleaned)
     after_dupes = int(cleaned.duplicated(subset=["nav_date", "proj_id"]).sum())

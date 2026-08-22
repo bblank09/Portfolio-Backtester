@@ -43,6 +43,18 @@ def test_data_status_returns_the_manifest_nav_start_date():
     assert body["nav_start"] == manifest["start"]
 
 
+def test_funds_endpoint_marks_funds_without_cached_nav_as_unavailable():
+    client = TestClient(app)
+
+    response = client.get("/api/funds")
+
+    assert response.status_code == 200
+    funds = response.json()["funds"]
+    assert all("has_nav_history" in fund for fund in funds)
+    assert all(fund["has_nav_history"] for fund in funds if fund["nav_start"])
+    assert any(not fund["has_nav_history"] for fund in funds if not fund["nav_start"])
+
+
 def test_data_status_returns_503_when_manifest_is_missing():
     client = TestClient(app)
     with patch.object(data_status_module, "MANIFEST_PATH", Path("data/sec/normalized/does_not_exist.json")):

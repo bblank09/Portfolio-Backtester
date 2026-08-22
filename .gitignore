@@ -27,3 +27,6 @@ Clean portfolio backtesting workspace.zip
 
 app/uploads/
 app/.thumbnail
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+graft/

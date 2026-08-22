@@ -1,4 +1,16 @@
+import scripts.sec_download_mvp as downloader
 from scripts.sec_download_mvp import normalize_page_records
+
+
+def test_actual_nav_start_uses_the_earliest_observed_date_not_requested_start():
+    rows = [
+        {"nav_date": "2015-01-06", "proj_id": "FUND_A"},
+        {"nav_date": "2015-01-05", "proj_id": "FUND_A"},
+    ]
+
+    actual_nav_start = getattr(downloader, "actual_nav_start", None)
+    assert actual_nav_start is not None
+    assert actual_nav_start(rows) == "2015-01-05"
 
 
 def test_normalize_page_records_skips_a_genuinely_invalid_nav_without_crashing():
@@ -69,6 +81,6 @@ def test_normalize_page_records_keeps_everything_when_no_class_is_designated():
         ]
     }
 
-    valid_rows, issues = normalize_page_records(payload, proj_id="FUND_A", expected_fund_class_name=None)
+    valid_rows, _issues = normalize_page_records(payload, proj_id="FUND_A", expected_fund_class_name=None)
 
     assert len(valid_rows) == 1

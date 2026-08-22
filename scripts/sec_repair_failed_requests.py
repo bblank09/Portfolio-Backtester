@@ -19,9 +19,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from backend.app.sec.cache import NORMALIZED_DIR, write_manifest, write_parquet
+from backend.app.sec.cache import (
+    NORMALIZED_DIR,
+    deduplicate_nav_frame,
+    write_manifest,
+    write_parquet,
+)
 from backend.app.sec.client import SecOpenDataClient
-from backend.app.sec.endpoints import FUND_DAILY_NAV
 from scripts.sec_download_mvp import (
     BASE_SLEEP_SECONDS,
     BLOCKING_STATUSES,
@@ -37,7 +41,7 @@ def main():
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     raw_dir = Path(manifest["raw_dir"])
     end_date = manifest["end"]
-    start_date = manifest["start"]
+    start_date = manifest.get("requested_start", manifest["start"])
 
     universe = pd.read_csv("data/sec/mvp_fund_universe.csv")
     expected_class_by_proj_id = dict(zip(universe["proj_id"], universe["fund_class_name"], strict=True))
@@ -110,7 +114,8 @@ def main():
     final_ledger_rows = kept_ledger.to_dict(orient="records") + new_ledger_rows
 
     existing_nav = pd.read_parquet(NORMALIZED_DIR / "daily_nav.parquet")
-    final_nav_rows = existing_nav.to_dict(orient="records") + recovered_rows
+    final_nav = deduplicate_nav_frame(pd.DataFrame(existing_nav.to_dict(orient="records") + recovered_rows))
+    final_nav_rows = final_nav.to_dict(orient="records")
 
     issues_path = NORMALIZED_DIR / "nav_data_quality_issues.parquet"
     existing_issues = pd.read_parquet(issues_path).to_dict(orient="records") if issues_path.exists() else []

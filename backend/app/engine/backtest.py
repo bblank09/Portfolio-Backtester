@@ -33,7 +33,12 @@ PERIODS_PER_YEAR = 12
 DAILY_PERIODS_PER_YEAR = 252
 
 
-def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
+def run_backtest(
+    request: BacktestRequest,
+    nav: pd.DataFrame,
+    *,
+    calendar_index: pd.DatetimeIndex | None = None,
+) -> dict[str, Any]:
     asset_ids = [asset.proj_id for asset in request.assets]
     required_columns = set(asset_ids + [request.benchmark_proj_id])
     missing = sorted(required_columns - set(nav.columns))
@@ -53,8 +58,18 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
     periods_per_year = DAILY_PERIODS_PER_YEAR if daily else PERIODS_PER_YEAR
     if daily:
         # Weekends are not missing data -- only a gap on an actual business
-        # day (a real closure or a hole in the cache) is incomplete.
-        expected_index = pd.bdate_range(panel.index.min(), panel.index.max())
+        # day (a real closure or a hole in the cache) is incomplete. The API
+        # supplies the SEC observation calendar so Thai market holidays are
+        # not mistaken for missing weekdays. Pure engine callers without a
+        # cache calendar retain the conservative weekday fallback.
+        expected_index = (
+            pd.DatetimeIndex(calendar_index).normalize().unique().sort_values()
+            if calendar_index is not None
+            else pd.bdate_range(panel.index.min(), panel.index.max())
+        )
+        expected_index = expected_index[
+            (expected_index >= panel.index.min()) & (expected_index <= panel.index.max())
+        ]
         observed_index = pd.DatetimeIndex(panel.index).normalize()
         incomplete_periods = {str(day.date()) for day in expected_index.difference(observed_index)}
         incomplete_periods.update(
@@ -95,7 +110,18 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
 
     for position, current_date in enumerate(panel.index[1:], start=1):
         starting_value = float(values.sum())
-        cashflow = signed_cashflow_amount(request) if cashflow_due(position, request) else 0.0
+        cashflow = (
+            signed_cashflow_amount(request)
+            if cashflow_due(
+                position,
+                request,
+                current_date=current_date,
+                initial_date=panel.index[0],
+                previous_date=panel.index[position - 1],
+                next_date=panel.index[position + 1] if position + 1 < len(panel.index) else None,
+            )
+            else 0.0
+        )
 
         if cashflow and request.cashflow.timing == CashflowTiming.beginning:
             applied_cashflow = apply_cashflow(values, target_weights, cashflow)
@@ -214,19 +240,23 @@ def run_backtest(request: BacktestRequest, nav: pd.DataFrame) -> dict[str, Any]:
         {"metric": "information_ratio", "value": info_ratio},
         {"metric": "correlation", "value": correlation(aligned_portfolio, aligned_benchmark)},
     ]
+    period_return_section = {
+        "title": "Daily Returns" if daily else "Monthly Returns",
+        "rows": [
+            {"date": pd.Timestamp(cast(Any, idx)).date().isoformat(), "return": float(value)}
+            for idx, value in portfolio_returns.items()
+        ],
+    }
     return {
         "data_source": "sec_open_data",
         "summary": summary,
         "equity_curve": series_points(portfolio_value),
         "benchmark_curve": series_points(benchmark_curve),
         "drawdown_curve": series_points(drawdown_series(portfolio_value)),
-        "monthly_returns": {
-            "title": "Monthly Returns",
-            "rows": [
-                    {"date": pd.Timestamp(cast(Any, idx)).date().isoformat(), "return": float(value)}
-                    for idx, value in portfolio_returns.items()
-                ],
-        },
+        "period_returns": period_return_section,
+        # Keep the old field while persisted clients migrate to the
+        # frequency-neutral contract.
+        "monthly_returns": period_return_section,
         "annual_returns": annual_return_table(portfolio_returns),
         "risk_metrics": {"title": "Benchmark Risk", "rows": risk_rows},
         "diversification": diversification_table(returns[asset_ids]),

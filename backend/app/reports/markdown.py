@@ -20,9 +20,10 @@ def render_research_report(
         ("SEC Dataset Manifest", manifest_section(manifest)),
         ("Selected Funds", selected_funds_section(request)),
         ("Input Assumptions", input_assumptions_section(request)),
-        ("NAV Alignment Method", nav_alignment_section()),
+        ("NAV Alignment Method", nav_alignment_section(request)),
         ("Cashflow Method", cashflow_section(request)),
         ("Rebalancing Method", rebalancing_section(request)),
+        ("Rebalancing Comparison", rebalancing_comparison_section(result)),
         ("Formula Reference", formula_reference_section()),
         ("Performance and Risk Results", summary_table(summary)),
         ("Benchmark Risk", rows_table(risk_metrics)),
@@ -80,7 +81,14 @@ def input_assumptions_section(request: dict[str, Any]) -> str:
     return rows_table(rows)
 
 
-def nav_alignment_section() -> str:
+def nav_alignment_section(request: dict[str, Any]) -> str:
+    if request.get("data", {}).get("frequency") == "daily":
+        return (
+            "Daily SEC NAV observations are loaded from the normalized local cache and aligned on the SEC-derived "
+            "observation calendar. Weekends and short weekday closures are excluded from completeness checks; a "
+            "long internal outage remains a missing daily session and blocks the run. The engine then slices the "
+            "aligned panel to the requested date range."
+        )
     return (
         "Daily SEC NAV observations are loaded from the normalized local cache, filtered to selected fund "
         "`proj_id` columns, then resampled and aligned across the complete cache at month-end. If the final "
@@ -112,6 +120,23 @@ def rebalancing_section(request: dict[str, Any]) -> str:
             f"more than `{threshold_pct}` percentage points from its target, checked each period."
         )
     return f"Portfolio holdings are rebalanced to target weights using `{mode}` schedule when the rebalance rule is due."
+
+
+def rebalancing_comparison_section(result: dict[str, Any]) -> str:
+    comparison = result.get("rebalancing_comparison")
+    if not isinstance(comparison, dict):
+        return "No rebalancing-impact baseline was requested for this run."
+    baseline = comparison.get("baseline_summary", {})
+    deltas = comparison.get("deltas", {})
+    active = result.get("summary", {})
+    rows = [
+        {"metric": "Ending value", "rebalanced": format_money(active.get("ending_value")), "no_rebalancing": format_money(baseline.get("ending_value")), "delta": format_money(deltas.get("ending_value"))},
+        {"metric": "TWRR", "rebalanced": format_percent(active.get("twrr")), "no_rebalancing": format_percent(baseline.get("twrr")), "delta": format_percent(deltas.get("twrr"))},
+        {"metric": "TWRR CAGR", "rebalanced": format_percent(active.get("twrr_cagr")), "no_rebalancing": format_percent(baseline.get("twrr_cagr")), "delta": format_percent(deltas.get("twrr_cagr"))},
+        {"metric": "Maximum drawdown", "rebalanced": format_percent(active.get("max_drawdown")), "no_rebalancing": format_percent(baseline.get("max_drawdown")), "delta": format_percent(deltas.get("max_drawdown"))},
+        {"metric": "Total costs", "rebalanced": format_money(active.get("total_costs")), "no_rebalancing": format_money(baseline.get("total_costs")), "delta": format_money(deltas.get("total_costs"))},
+    ]
+    return rows_table(rows)
 
 
 def formula_reference_section() -> str:
@@ -217,9 +242,9 @@ def quality_section(quality_issues: list[dict[str, Any]]) -> str:
 def reproducibility_section(result: dict[str, Any]) -> str:
     run_id = result.get("run_id", "<run_id>")
     return (
-        f"The selected summary metrics can be rechecked from `data/runs/{run_id}/request.json`, "
-        f"`data/runs/{run_id}/result.json`, and the current cached SEC NAV files under `data/sec/normalized/`. "
-        "This verification does not restore the original cache snapshot, dependency versions, engine version, or report output.\n\n"
+        f"The run is anchored by `data/runs/{run_id}/request.json`, `data/runs/{run_id}/result.json`, "
+        f"`data/runs/{run_id}/sec_data_manifest.json`, and `data/runs/{run_id}/environment.json`. "
+        "The saved SEC cache snapshot and environment metadata explain which inputs produced this report.\n\n"
         f"Verification command: `python3 scripts/sec_verify_run_reproducibility.py {run_id}`"
     )
 
@@ -287,7 +312,7 @@ def format_number(value: Any) -> str:
 def format_money(value: Any) -> str:
     if value is None:
         return "n/a"
-    return f"{float(value):,.2f}"
+    return f"THB {float(value):,.2f}"
 
 
 def format_percent(value: Any, *, scale: int = 100) -> str:

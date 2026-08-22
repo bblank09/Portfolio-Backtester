@@ -133,13 +133,38 @@
 
 * { box-sizing: border-box; }
 html, body { margin: 0; padding: 0; }
+html { background: var(--bg); }
 body {
-  background: var(--bg);
+  background: transparent;
   color: var(--text-primary);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14.5px;
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Ambient animated background (DarkVeil). Sits behind the whole app; panels
+   keep solid surfaces on top so it only reads as a soft glow around edges
+   and in the gaps between them. Opacity/blend are tuned per theme so it
+   stays a subtle accent in light mode and a fuller mood-setter in dark mode. */
+.app-veil {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.16;
+  mix-blend-mode: multiply;
+  transition: opacity 0.4s ease;
+}
+:root[data-theme="dark"] .app-veil {
+  opacity: 0.8;
+  mix-blend-mode: screen;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .app-veil {
+    opacity: 0.8;
+    mix-blend-mode: screen;
+  }
 }
 button, input, select { font-family: inherit; font-size: inherit; }
 
@@ -185,6 +210,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 .stepper { display: flex; align-items: center; gap: 4px; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--r-pill); padding: 4px; }
 .step {
+  appearance: none; border: 0; background: transparent; font: inherit;
   display: flex; align-items: center; gap: 6px; padding: 6px 14px 6px 10px;
   border-radius: var(--r-pill); color: var(--text-tertiary); font-size: 12.5px; font-weight: 500;
   cursor: pointer; user-select: none; transition: background .15s, color .15s; white-space: nowrap;
@@ -358,9 +384,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .form-field label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--text-secondary); }
 .section-title { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; color: var(--text-tertiary); margin: 4px 0 12px; }
 .advanced-toggle {
+  appearance: none; background: transparent; width: 100%; text-align: left;
   display: flex; align-items: center; gap: 8px; cursor: pointer;
   font-size: 13px; font-weight: 600; color: var(--text-primary);
-  padding: 10px 0; border-top: 1px solid var(--border); margin-top: 18px;
+  padding: 10px 0; border: 0; border-top: 1px solid var(--border); margin-top: 18px;
 }
 .advanced-toggle .chev { transition: transform .15s; color: var(--text-tertiary); display: inline-block; }
 .advanced-toggle.open .chev { transform: rotate(90deg); }

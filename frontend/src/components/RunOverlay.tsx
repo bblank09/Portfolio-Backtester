@@ -23,9 +23,10 @@ export function RunOverlay({ open }: Props) {
   if (!open) return null;
 
   return (
-    <div className="run-overlay open">
+    <div aria-labelledby="run-overlay-title" aria-modal="true" className="run-overlay open" role="dialog">
       <div className="run-panel">
-        <h4>Running backtest&hellip;</h4>
+        <h4 id="run-overlay-title">Running backtest&hellip;</h4>
+        <p aria-live="polite" className="srOnly">{STAGES[activeStage]}</p>
         <div className="run-steps">
           {STAGES.map((stage, index) => (
             <div className={index < activeStage ? "run-step done" : index === activeStage ? "run-step active" : "run-step"} key={stage}>
