@@ -1,9 +1,10 @@
 import logging
 from pathlib import Path
+from typing import cast
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -21,7 +22,18 @@ logger = logging.getLogger("app")
 app = FastAPI(title="SEC Open Data Portfolio Backtester", version="0.1.0")
 
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+async def rate_limit_exceeded_handler(request: Request, exc: Exception) -> Response:
+    # slowapi's own handler is typed against RateLimitExceeded specifically,
+    # which mypy sees as incompatible with Starlette's generic
+    # `Callable[[Request, Exception], Response]` handler signature. Starlette
+    # only ever calls this with a RateLimitExceeded (it's registered for that
+    # exact exception type below), so the cast is safe.
+    return _rate_limit_exceeded_handler(request, cast(RateLimitExceeded, exc))
+
+
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 
 
 @app.exception_handler(Exception)
