@@ -41,12 +41,6 @@ export function BacktestWorkspace() {
   // funds list is a much bigger payload than one saved run, it reliably
   // wins and overwrites the just-loaded shared result with demo funds.
   const [openedAsSharedRun] = useState(() => new URLSearchParams(window.location.search).has("run"));
-  const [theme, setTheme] = useState<"light" | "dark">(() => (localStorage.getItem("pb-theme") === "dark" ? "dark" : "light"));
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("pb-theme", theme);
-  }, [theme]);
 
   useEffect(() => {
     fetchFunds()
@@ -217,9 +211,6 @@ export function BacktestWorkspace() {
           {navAsOf ? <span className="tag nav-as-of">NAV data as of {formatNavDate(navAsOf)}</span> : null}
         </div>
         <Stepper currentStep={currentStep} unlockedStep={unlockedStep} onStepClick={goToStep} />
-        <button className="theme-toggle" onClick={() => setTheme((current) => (current === "light" ? "dark" : "light"))} type="button">
-          Toggle theme
-        </button>
       </header>
 
       <div className="main">
@@ -260,7 +251,7 @@ export function BacktestWorkspace() {
       </div>
 
       <footer className="app-footer">
-        <img alt="Supachok Julaupay signature mark" className="app-footer-mark" src={theme === "dark" ? "/brand/author-logo-dark.png" : "/brand/author-logo-light.png"} />
+        <img alt="Supachok Julaupay signature mark" className="app-footer-mark" src="/brand/author-logo-dark.png" />
         <div className="app-footer-text">
           <span className="app-footer-name">Supachok Julaupay</span>
           <a href="https://github.com/bblank09" rel="noreferrer" target="_blank">github.com/bblank09</a>

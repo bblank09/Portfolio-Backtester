@@ -237,7 +237,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   .brand .tag { display: none; }
 }
 
-.theme-toggle { border: 1px solid var(--border); background: var(--surface); border-radius: var(--r-pill); height: 38px; padding: 0 16px; font-size: 12.5px; font-weight: 600; color: var(--text-secondary); cursor: pointer; display: inline-flex; align-items: center; }
 
 /* ---------- Layout ---------- */
 .main { display: flex; justify-content: center; padding: 28px 20px 60px; }
@@ -611,7 +610,7 @@ th { position: sticky; top: 0; background: var(--surface); color: var(--text-ter
 /* ---------- Print (Report tab -> "Print / Save PDF") ---------- */
 @media print {
   .topbar, .app-footer, .resultTabs, .exportActions, .run-overlay, .actions,
-  .resultHeader .secondaryButton, .theme-toggle {
+  .resultHeader .secondaryButton {
     display: none !important;
   }
   .shell { display: block; min-height: 0; }
