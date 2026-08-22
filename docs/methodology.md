@@ -36,10 +36,10 @@ Weights are treated as target allocation percentages and should sum to 100%.
 Daily SEC NAV observations are loaded from the local normalized cache and aligned into a portfolio panel:
 
 1. Filter to the selected funds plus benchmark fund.
-2. Resample and align the complete selected-fund cache to the application analysis frequency, currently month-end.
+2. Resample and align the complete selected-fund cache to the requested analysis frequency (month-end or daily SEC sessions).
 3. If the final cache resampling label falls after its latest observed NAV date, relabel that final row to the latest observed date.
 4. Slice the aligned panel to the requested date range and record quality issues when data is missing, sparse, or insufficient.
-5. The engine slices the same aligned panel for calculation and rejects the calculation if a selected asset has a missing NAV period or an internal calendar month is absent.
+5. The engine slices the same aligned panel for calculation. Daily runs use the SEC-derived observation calendar so weekends and short weekday closures are not treated as missing; long internal outages remain missing daily sessions. Monthly runs reject an internal calendar month absent from the selected panel.
 
 This avoids compressing time, skipping scheduled cashflows, or mixing unmatched selected-fund periods in portfolio-level metrics. Benchmark gaps remain missing and are excluded from matched-period comparisons. A requested end date before the cache's final incomplete period does not independently create or cap a partial month-end row.
 
@@ -126,9 +126,11 @@ Every persisted run stores:
 
 - `data/runs/<run_id>/request.json`
 - `data/runs/<run_id>/result.json`
+- `data/runs/<run_id>/sec_data_manifest.json` — manifest snapshot captured when the run was created.
+- `data/runs/<run_id>/environment.json` — Python/platform/package metadata captured when the run was created.
 - `data/runs/<run_id>/cqf_report.md` after report generation
 
-The reproducibility verifier reruns the current engine from `request.json` and the current local normalized SEC NAV cache, then compares selected summary outputs with the saved `result.json` using a tolerance of `1e-8`. It does not restore the NAV-cache snapshot, dependency versions, engine version, or report output that existed when the run was created.
+The reproducibility verifier reruns the current engine from `request.json` and the current local normalized SEC NAV cache, then compares selected summary outputs with the saved `result.json` using a tolerance of `1e-8`. The saved manifest and environment files preserve the original provenance for investigation; numerical re-execution still requires an operator to restore the original NAV parquet and dependency environment when bit-for-bit historical reproduction is required.
 
 Run it from the project root after installing the Python dependencies and ensuring `data/sec/normalized/daily_nav.parquet` is available. No SEC API key is required to verify an already cached run.
 

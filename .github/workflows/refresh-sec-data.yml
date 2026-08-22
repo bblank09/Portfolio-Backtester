@@ -16,6 +16,9 @@ on:
     - cron: "0 18 * * *" # 18:00 UTC = 01:00 ICT next day, well after NAV publication
   workflow_dispatch: {}
 
+permissions:
+  contents: write
+
 jobs:
   refresh:
     runs-on: ubuntu-latest

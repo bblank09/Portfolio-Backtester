@@ -1,3 +1,5 @@
+from typing import cast
+
 from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
@@ -14,5 +16,6 @@ class AppHTTPException(HTTPException):
         self.code = code
 
 
-async def app_http_exception_handler(request: Request, exc: AppHTTPException) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail, "code": exc.code.value})
+async def app_http_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    app_exc = cast(AppHTTPException, exc)
+    return JSONResponse(status_code=app_exc.status_code, content={"detail": app_exc.detail, "code": app_exc.code.value})

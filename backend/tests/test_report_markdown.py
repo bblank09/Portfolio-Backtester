@@ -23,7 +23,7 @@ def test_report_documents_current_reproducibility_command_and_scope():
     )
 
     assert "python3 scripts/sec_verify_run_reproducibility.py saved-run" in report
-    assert "does not restore the original cache snapshot" in report
+    assert "saved SEC cache snapshot" in report
     assert "resampled and aligned across the complete cache" in report
     assert "does not independently create or cap a partial month-end row" in report
 

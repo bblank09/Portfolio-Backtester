@@ -1,7 +1,10 @@
+import math
+from copy import deepcopy
+
 import pytest
 from pydantic import ValidationError
 
-from backend.app.domain.schemas import BacktestRequest
+from backend.app.domain.schemas import BacktestRequest, MetricSummary
 
 
 def valid_request():
@@ -32,6 +35,36 @@ def test_weights_must_sum_to_100():
     payload["assets"][0]["weight"] = 50
     with pytest.raises(ValidationError, match="weights must sum to 100"):
         BacktestRequest(**payload)
+
+# Regression coverage for numeric inputs and API response values.
+@pytest.mark.parametrize(
+    "mutate",
+    [
+        lambda payload: payload.update(initial_capital=math.inf),
+        lambda payload: payload.update(risk_free_rate_pct=math.nan),
+        lambda payload: payload["assets"][0].update(weight=math.inf),
+        lambda payload: payload["cashflow"].update(amount=math.nan),
+        lambda payload: payload["rebalancing"].update(threshold_pct=math.inf),
+        lambda payload: payload["costs"].update(transaction_bps=math.nan),
+    ],
+)
+def test_backtest_request_rejects_non_finite_numeric_inputs(mutate):
+    payload = deepcopy(valid_request())
+    mutate(payload)
+
+    with pytest.raises(ValidationError, match="finite"):
+        BacktestRequest(**payload)
+
+
+def test_metric_summary_rejects_non_finite_output_values():
+    with pytest.raises(ValidationError, match="finite"):
+        MetricSummary(
+            ending_value=math.inf,
+            twrr=0,
+            twrr_cagr=0,
+            volatility=0,
+            max_drawdown=0,
+        )
 
 
 def test_duplicate_asset_proj_ids_are_rejected():

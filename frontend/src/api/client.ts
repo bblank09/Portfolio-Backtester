@@ -9,19 +9,34 @@ export function assertSecOnly(result: unknown) {
   }
 }
 
-function extractErrorMessage(text: string): string {
+export class ApiError extends Error {
+  code?: string;
+  status: number;
+
+  constructor(message: string, status: number, code?: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.code = code;
+  }
+}
+
+function extractError(text: string): { message: string; code?: string } {
   try {
-    const parsed = JSON.parse(text) as { detail?: unknown };
-    if (typeof parsed.detail === "string") return parsed.detail;
+    const parsed = JSON.parse(text) as { detail?: unknown; code?: unknown };
+    if (typeof parsed.detail === "string") return { message: parsed.detail, code: typeof parsed.code === "string" ? parsed.code : undefined };
     if (Array.isArray(parsed.detail)) {
-      return parsed.detail
-        .map((item) => (item && typeof item === "object" && "msg" in item ? String((item as { msg: unknown }).msg) : JSON.stringify(item)))
-        .join("; ");
+      return {
+        message: parsed.detail
+          .map((item) => (item && typeof item === "object" && "msg" in item ? String((item as { msg: unknown }).msg) : JSON.stringify(item)))
+          .join("; "),
+        code: typeof parsed.code === "string" ? parsed.code : undefined
+      };
     }
   } catch {
     // Not JSON — fall through and use the raw text.
   }
-  return text;
+  return { message: text };
 }
 
 async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
@@ -31,7 +46,8 @@ async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!response.ok) {
     const text = await response.text();
-    throw new Error(extractErrorMessage(text) || `Request failed with status ${response.status}`);
+    const error = extractError(text);
+    throw new ApiError(error.message || `Request failed with status ${response.status}`, response.status, error.code);
   }
   const data = (await response.json()) as T;
   assertSecOnly(data);
@@ -53,9 +69,9 @@ export async function fetchDataStatus(): Promise<DataStatus> {
 // client-side "latest nav_start .. earliest nav_end" intersection can
 // still contain a real gap (e.g. the 2024-06 to 2024-11 SEC-wide
 // incident) that the engine would reject.
-export async function fetchTestableRange(projIds: string[]): Promise<{ start: string | null; end: string | null }> {
+export async function fetchTestableRange(projIds: string[], frequency: BacktestRequest["data"]["frequency"] = "monthly"): Promise<{ start: string | null; end: string | null }> {
   if (!projIds.length) return { start: null, end: null };
-  const params = new URLSearchParams({ proj_ids: projIds.join(",") });
+  const params = new URLSearchParams({ proj_ids: projIds.join(","), frequency });
   return requestJson<{ start: string | null; end: string | null }>(`/api/funds/testable-range?${params.toString()}`);
 }
 
@@ -64,9 +80,9 @@ export async function fetchBacktestByRunId(runId: string): Promise<BacktestResul
 }
 
 export async function runBacktest(payload: BacktestRequest): Promise<BacktestResult> {
-  const result = await requestJson<Omit<BacktestResult, "request">>("/api/backtests", {
+  const result = await requestJson<BacktestResult>("/api/backtests", {
     method: "POST",
     body: JSON.stringify(payload)
   });
-  return { ...result, request: payload };
+  return { ...result, request: result.request ?? payload };
 }

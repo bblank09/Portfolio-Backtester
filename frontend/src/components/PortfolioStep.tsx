@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FocusEvent, KeyboardEvent } from "react";
 import { ChevronDown, Search, SlidersHorizontal, X } from "lucide-react";
+import { hasCachedNavHistory } from "../types/backtest";
 import type { SecFund, SecFundAllocation } from "../types/backtest";
 
 interface Row {
@@ -16,7 +17,7 @@ interface Facet {
 }
 
 // SEC's policy_desc is a Thai-language category label from the API. This
-// map covers every value observed in the full 800-fund universe (checklist
+// map covers every value observed in the full 2,000-fund universe (checklist
 // 8.8) -- verified against data/sec/mvp_fund_universe.csv, not just the
 // handful of categories the original 12-fund universe happened to have.
 const CATEGORY_LABELS_EN: Record<string, string> = {
@@ -67,6 +68,11 @@ interface Props {
   active: boolean;
   onAssetsChange: (assets: SecFundAllocation[]) => void;
   onContinue: () => void;
+  // Suppress the "seed two example funds on first load" convenience. Set
+  // when the page was opened as a shared run link -- that link's own
+  // request/result load must not be clobbered by an unrelated demo seed
+  // that fires as soon as the (much larger, slower) funds list resolves.
+  skipAutoSeed?: boolean;
 }
 
 const PALETTE = ["#5b21d6", "#34383e", "#92620a", "#9aa1ac", "#7c4ded"];
@@ -77,7 +83,7 @@ function nextKey() {
   return `row-${rowSeq}`;
 }
 
-export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Props) {
+export function PortfolioStep({ funds, active, onAssetsChange, onContinue, skipAutoSeed }: Props) {
   const [rows, setRows] = useState<Row[]>([{ key: nextKey(), projId: "", weight: 0, query: "" }]);
   const [amcFilter, setAmcFilter] = useState<Set<string>>(new Set());
   const [categoryFilter, setCategoryFilter] = useState<Set<string>>(new Set());
@@ -119,9 +125,11 @@ export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Pro
   }
 
   useEffect(() => {
-    if (seededRef.current || funds.length < 2) return;
+    if (seededRef.current || funds.length < 2 || skipAutoSeed) return;
     seededRef.current = true;
-    seedRows(funds.slice(0, 2).map((fund, index) => ({ fund, weight: index === 0 ? 60 : 40 })));
+    const availableFunds = funds.filter(hasCachedNavHistory);
+    if (availableFunds.length < 2) return;
+    seedRows(availableFunds.slice(0, 2).map((fund, index) => ({ fund, weight: index === 0 ? 60 : 40 })));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [funds]);
 
@@ -197,8 +205,9 @@ export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Pro
   }
 
   function loadExample() {
-    if (funds.length < 2) return;
-    seedRows(funds.slice(0, 2).map((fund, index) => ({ fund, weight: index === 0 ? 60 : 40 })));
+    const availableFunds = funds.filter(hasCachedNavHistory);
+    if (availableFunds.length < 2) return;
+    seedRows(availableFunds.slice(0, 2).map((fund, index) => ({ fund, weight: index === 0 ? 60 : 40 })));
   }
 
   const committedRows = rows.filter((row) => row.projId);
@@ -338,7 +347,7 @@ function HoldingsRow({
   });
   // Show every match, not just the first few -- the dropdown already has a
   // fixed max-height with overflow-y: auto (see .fund-suggest in styles.css),
-  // so with 800+ funds in the universe a hard cap here would silently hide
+  // so with 2,000 funds in the universe a hard cap here would silently hide
   // matches the user has no way to scroll to.
   const visibleOptions = options;
   const listboxId = `${row.key}-listbox`;
@@ -424,10 +433,14 @@ function HoldingsRow({
             </div>
           ) : null}
           <div aria-label="Fund suggestions" id={listboxId} role="listbox">
-            {visibleOptions.map((item, index) => (
+        {visibleOptions.map((item, index) => {
+          const available = hasCachedNavHistory(item);
+          return (
               <button
                 aria-selected={index === highlight}
-                className={index === highlight ? "highlighted" : ""}
+                aria-disabled={!available}
+                className={`${index === highlight ? "highlighted" : ""}${available ? "" : " unavailable"}`}
+                disabled={!available}
                 id={optionId(index)}
                 key={`${item.proj_id}-${item.fund_class_name}`}
                 onMouseDown={(event) => { event.preventDefault(); onSelect(item); setOpen(false); }}
@@ -436,14 +449,17 @@ function HoldingsRow({
               >
                 {item.display_name}
                 <span className="fid">{item.proj_id} &middot; {item.fund_class_name}</span>
-                {formatCoverage(item) ? <span className="coverage">{formatCoverage(item)}</span> : null}
+                {available && formatCoverage(item) ? <span className="coverage">{formatCoverage(item)}</span> : null}
+                {!available ? <span className="coverage">No cached NAV history</span> : null}
               </button>
-            ))}
+          );
+        })}
             {!options.length ? <button disabled type="button">No matching funds</button> : null}
           </div>
         </div>
       </div>
       <input
+        aria-label={`Weight for ${fund?.display_name ?? (row.query || "selected fund")}`}
         className="field num weight-input"
         type="number"
         min={0}

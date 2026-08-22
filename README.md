@@ -93,12 +93,12 @@ Everything downstream of the parquet cache is a pure function of it: `run_backte
 
 | Layer | Technology |
 | --- | --- |
-| Frontend | React 18, TypeScript, Vite, hand-built SVG charting (no charting library dependency) |
+| Frontend | React 19, TypeScript, Vite, hand-built SVG charting (no charting library dependency) |
 | Backend | FastAPI, Pydantic v2, pandas, numpy, scipy |
 | Data | SEC Thailand Open Data API, cached locally as Parquet |
 | Testing | pytest (backend engine + API), tsc (frontend type-check) |
 
-**Data flow:** SEC Open Data → `backend/app/sec/` fetch + normalize → local Parquet cache → `backend/app/engine/` computes the backtest against the cached panel → `backend/app/api/` serves the result → the frontend renders it across nine analysis tabs (Summary, Overview, Growth, Drawdown, Returns, Metrics, Cashflows, Rebalancing, Report).
+**Data flow:** SEC Open Data → `backend/app/sec/` fetch + normalize → local Parquet cache → `backend/app/engine/` computes the backtest against the cached panel → `backend/app/api/` serves the frequency-aware result contract → the frontend renders it across eight analysis tabs (Summary, Growth, Drawdown, Returns, Metrics, Cashflows, Rebalancing, Report).
 
 ## 5. Methodology
 
@@ -116,14 +116,14 @@ The in-app **Report** tab exposes this same audit trail per run: objective, inpu
 - **Guided 4-step workflow** — Portfolio → Objective → Assumptions → Results, with a top stepper bar; each step is validated before the next unlocks (e.g. weights must sum to 100% before continuing).
 - **Search-driven fund picker** — click a fund field to browse the full SEC universe, or type to filter (by `proj_id`, fund name, or class); an allocation donut chart updates live as weights change.
 - **Objective-driven assumptions** — four presets (Past Performance, Monthly DCA, Monthly Withdrawal, Rebalancing Impact) auto-fill required inputs while keeping everything editable, with a plain-language review summary before running.
-- **Nine-tab result view** — Summary, Overview, Growth, Drawdown, Returns, Metrics, Cashflows, Rebalancing, Report.
+- **Eight-tab result view** — Summary, Growth, Drawdown, Returns, Metrics, Cashflows, Rebalancing, Report.
 - **Interactive charts** — hover crosshair with per-series tooltips, full date-labeled axes (not just start/end), min/max/latest stats, on every time-series chart in the app.
-- **Monthly return heatmap, histogram, and rolling 12-month return/volatility/tracking-error.**
+- **Frequency-aware returns analysis** — monthly runs show a month heatmap; daily runs show daily distributions and one-year rolling return/volatility/tracking-error using 252 periods/year.
 - **Cashflow simulation** — recurring contribution or withdrawal, configurable frequency and timing (beginning/end of period).
 - **Rebalancing simulation** — none / monthly / quarterly / annual, with turnover and cost tracking.
 - **Benchmark risk decomposition** — beta, alpha, tracking error, information ratio, correlation.
 - **Light and dark themes** — toggle in the top bar, preference remembered across visits.
-- **Reproducibility verification** — every run persists `request.json` + `result.json`; a saved run can be recomputed and diffed against the stored result (`scripts/sec_verify_run_reproducibility.py`).
+- **Reproducibility verification** — every run persists `request.json`, `result.json`, `sec_data_manifest.json`, and `environment.json`; a saved run can be recomputed and diffed against the stored result (`scripts/sec_verify_run_reproducibility.py`).
 - **Exportable research report** — Markdown report, run config, and metrics JSON, generated per run.
 
 ## 7. Installation & Setup
@@ -189,7 +189,7 @@ Open the frontend dev server URL and follow the 4-step workflow: build a portfol
 python3 scripts/sec_verify_run_reproducibility.py <run_id>
 ```
 
-This reruns the current engine against the same local NAV cache and compares selected summary metrics to the persisted result within a `1e-8` tolerance. It does not snapshot the historical cache, dependency versions, or engine version — a mismatch can mean the local cache or code changed since the run was saved, not necessarily a bug.
+This reruns the current engine against the current local NAV cache and compares selected summary metrics to the persisted result within a `1e-8` tolerance. The run directory also retains the SEC manifest and environment metadata captured at creation time, so a mismatch can be investigated against the original data provenance and runtime context.
 
 ## 9. Project Structure
 
@@ -219,7 +219,10 @@ scripts/         # Data download and reproducibility verification scripts
 
 ```bash
 python3 -m pytest backend/tests        # backend engine + API tests
-npx --prefix frontend tsc -b           # frontend type-check
+ruff check .
+mypy backend/app --ignore-missing-imports
+npm --prefix frontend run build
+npm --prefix frontend run test:e2e
 ```
 
 The backend test suite covers the engine's return calculations, metrics, cashflow/rebalancing logic, the SEC client/normalizer, the report generator, and run reproducibility — not just API smoke tests.
@@ -247,14 +250,14 @@ Targets for whoever operates this app to judge "is it healthy" without needing t
 | --- | --- | --- |
 | Successful backtest runs / day | Track as a baseline once real traffic exists; no target number yet for a single-user tool with no analytics deployed | `grep "backtest request succeeded" <log file> \| grep "$(date +%Y-%m-%d)" \| wc -l` |
 | Error rate on `POST /api/backtests` | **< 1%** of requests result in a 5xx (server-side failure) or an unexpected 4xx (excludes ordinary validation errors like weights not summing to 100%, which are expected user-input feedback, not app errors) | `(count of "backtest request failed" lines) / (count of "backtest request:" lines)` per day — note the trailing colon on the denominator's pattern, since "backtest request failed"/"succeeded" both also contain the substring "backtest request" |
-| p95 response time for a normal backtest | **< 3s** for a request against the current cached universe (≤12 funds, monthly frequency, ≤10-year window) | Each request logs `duration=%.3fs`; compute the 95th percentile from the logged durations over a time window |
+| p95 response time for a normal backtest | **< 3s** for a request against the current cached universe (≤20 selected funds, monthly frequency, ≤10-year window) | Each request logs `duration=%.3fs`; compute the 95th percentile from the logged durations over a time window |
 
-**Measured so far** (manual/E2E testing against the current 12-fund cache, not a load test): every real request logged during this project's development consistently completed in **0.05–0.2s** — comfortably under the 3s target. This is not a substitute for measuring p95 under real concurrent traffic once deployed, since the target exists specifically to catch degradation the developer's own testing wouldn't surface — e.g. if the cached fund universe grows well beyond its current 12 funds, `pd.read_parquet()`'s full-file load (it reads the entire cache into memory before filtering to the requested funds) becomes the likely bottleneck, well before 12-fund-scale testing would ever show it.
+**Measured so far** (manual/E2E testing against the current 2,000-fund universe, not a load test): every real request logged during this project's development consistently completed in **0.05–0.2s** — comfortably under the 3s target. The NAV loader uses Parquet predicate pushdown to read only requested `proj_id` rows, so the universe size and request size should be monitored separately. This is not a substitute for measuring p95 under real concurrent traffic once deployed.
 
 ## 13. Limitations & Known Issues
 
 - **Not investment advice.** All outputs are historical simulations, not predictions or recommendations.
-- **Survivorship bias — confirmed present.** The cached 800-fund universe (`data/sec/mvp_fund_universe.csv`) is built by [`scripts/sec_build_mvp_universe.py`](scripts/sec_build_mvp_universe.py), which explicitly keeps only records with `fund_status == "Registered"`. Verified live against the SEC Open Data API: of 11,500 total fund records, 4,900 are `Registered` and the remaining 6,600 are `Liquidated`, `Expired`, `Canceled`, or `IPO`. This means historical returns in this tool are computed only over funds that survived to today; funds that closed or merged away are not represented, which biases aggregate/comparative conclusions upward (see Elton, Gruber & Blake on survivorship bias in mutual fund databases). Do not treat this dataset as survivorship-bias-free, and do not extrapolate past this specific fund list to the broader Thai mutual fund market.
+- **Survivorship bias — confirmed present.** The cached 2,000-fund universe (`data/sec/mvp_fund_universe.csv`) is built by [`scripts/sec_build_mvp_universe.py`](scripts/sec_build_mvp_universe.py), which explicitly keeps only records with `fund_status == "Registered"`. This means historical returns in this tool are computed only over funds that survived to today; funds that closed or merged away are not represented, which biases aggregate/comparative conclusions upward (see Elton, Gruber & Blake on survivorship bias in mutual fund databases). Do not treat this dataset as survivorship-bias-free, and do not extrapolate past this specific fund list to the broader Thai mutual fund market.
 - **Known SEC-wide NAV data gap: 2024-06-26 to ~2024-11-18.** SEC's own daily-info/nav API has no data for essentially every fund during this ~4.5-month window — confirmed by querying the live API directly (not just our cache), which returns the same gap. This is not a bug in this app's download pipeline. A backtest whose date range spans this window will be rejected with `INSUFFICIENT_NAV_HISTORY` rather than silently interpolating over missing data. For funds with a long history (registered well before 2024), the two continuously-testable windows are **2015-01-05 to 2024-06-26** and **~2024-12-30 onward** (94% of long-lived funds resume by then; a further ~6% have their own additional fund-specific gaps into 2025, unrelated to this shared incident — normal per-fund data variance, not a second systemic gap). Funds registered after the gap window are unaffected since their whole history starts later anyway.
 - **No live/real-time data** — the engine reads a locally cached NAV snapshot, refreshed automatically via `.github/workflows/refresh-sec-data.yml` (daily) or manually via `scripts/sec_download_mvp.py`.
 - **Scope** — no Monte Carlo simulation, portfolio optimization, efficient frontier, or live broker execution by design.

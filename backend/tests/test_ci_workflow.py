@@ -43,3 +43,16 @@ def test_ci_workflow_runs_frontend_build():
         if "run" in step
     )
     assert "npm run build" in all_run_steps
+
+
+def test_ci_workflow_runs_static_checks_and_e2e_tests():
+    workflow = _load_workflow()
+    all_run_steps = " ".join(
+        step["run"]
+        for job in workflow["jobs"].values()
+        for step in job["steps"]
+        if "run" in step
+    )
+    assert "ruff check" in all_run_steps
+    assert "mypy backend/app" in all_run_steps
+    assert "@playwright/test/cli.js test" in all_run_steps

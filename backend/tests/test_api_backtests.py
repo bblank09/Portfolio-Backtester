@@ -59,7 +59,7 @@ def test_backtest_endpoint_uses_sec_cache_and_persists_run():
     assert (run_dir / "result.json").exists()
 
 
-def test_backtest_report_endpoint_exports_research_report_markdown():
+def test_backtest_report_endpoint_exports_cqf_report_markdown():
     result = create_sample_backtest()
     client = TestClient(app)
     response = client.get(f"/api/backtests/{result['run_id']}/report")
@@ -69,48 +69,56 @@ def test_backtest_report_endpoint_exports_research_report_markdown():
     assert "Formula Reference" in report
     assert "Limitations" in report
     assert "mock" not in report.lower()
-    assert (Path("data/runs") / result["run_id"] / "research_report.md").exists()
+    assert (Path("data/runs") / result["run_id"] / "cqf_report.md").exists()
+
+
+def test_rebalancing_impact_includes_a_no_rebalancing_baseline():
+    universe = pd.read_csv("data/sec/mvp_fund_universe.csv")
+    first_proj_id, second_proj_id, start_date, end_date = sample_window()
+    first = universe.loc[universe["proj_id"] == first_proj_id].iloc[0]
+    second = universe.loc[universe["proj_id"] == second_proj_id].iloc[0]
+    payload = {
+        "objective": "rebalancing_impact",
+        "assets": [
+            {"proj_id": first["proj_id"], "display_name": first["display_name"], "weight": 50},
+            {"proj_id": second["proj_id"], "display_name": second["display_name"], "weight": 50},
+        ],
+        "start_date": start_date,
+        "end_date": end_date,
+        "initial_capital": 100000,
+        "benchmark_proj_id": first["proj_id"],
+        "cashflow": {"enabled": False, "type": "contribution", "amount": 0, "frequency": "monthly", "timing": "end"},
+        "rebalancing": {"mode": "annual"},
+        "costs": {"transaction_bps": 5, "slippage_bps": 0, "annual_drag_pct": 0},
+        "data": {"source": "sec_open_data", "price_field": "nav_per_unit", "frequency": "monthly"},
+    }
+
+    response = TestClient(app).post("/api/backtests", json=payload)
+
+    assert response.status_code == 200
+    comparison = response.json()["rebalancing_comparison"]
+    assert comparison["baseline_summary"]["rebalance_count"] == 0
+    assert set(comparison["deltas"]) == {"ending_value", "twrr", "twrr_cagr", "max_drawdown", "total_costs"}
 
 
 @lru_cache(maxsize=1)
 def sample_window() -> tuple[str, str, str, str]:
-    universe = pd.read_csv("data/sec/mvp_fund_universe.csv")
-    funds = universe[["proj_id", "display_name"]].drop_duplicates()
-    ordered_proj_ids = funds["proj_id"].tolist()
-    panel = align_nav_panel(load_nav_panel(ordered_proj_ids)).sort_index()
-    # A universe entry with zero downloaded NAV rows (a fund SEC has no
-    # published NAV for in the requested window at all) never gets a column
-    # in the pivoted panel -- restrict to what the panel actually has so the
-    # pair search below doesn't index a proj_id that isn't there.
-    ordered_proj_ids = [proj_id for proj_id in ordered_proj_ids if proj_id in panel.columns]
-    best: tuple[int, pd.Timestamp, str, str, pd.Timestamp, pd.Timestamp] | None = None
+    """Return a bounded real-cache fixture for API integration tests.
 
-    for first_index, first_proj_id in enumerate(ordered_proj_ids):
-        for second_proj_id in ordered_proj_ids[first_index + 1 :]:
-            pair = panel[[first_proj_id, second_proj_id]].dropna(how="any")
-            if len(pair) < 12:
-                continue
-            periods = pd.PeriodIndex(pair.index, freq="M")
-            run_start = 0
-            for index in range(1, len(periods) + 1):
-                gap_detected = index == len(periods) or periods[index] != periods[index - 1] + 1
-                if not gap_detected:
-                    continue
-                run = pair.iloc[run_start:index]
-                if len(run) >= 12:
-                    candidate = (len(run), run.index[-1], first_proj_id, second_proj_id, run.index[0], run.index[-1])
-                    if best is None or candidate > best:
-                        best = candidate
-                run_start = index
-
-    assert best is not None, "No SEC cache pair has a continuous 12-month overlap for the API integration test."
-    _, _, first_proj_id, second_proj_id, start_date, end_date = best
-    return (
-        first_proj_id,
-        second_proj_id,
-        start_date.date().isoformat(),
-        end_date.date().isoformat(),
-    )
+    The former implementation loaded the full 2,000-fund universe and
+    searched every pair, turning a smoke test into an accidental O(n^2)
+    benchmark that could run for many minutes in CI. These two long-lived
+    funds are already used by the schema/API fixtures and provide a stable
+    one-year overlap without hiding the real cache path.
+    """
+    first_proj_id = "M0209_2548"
+    second_proj_id = "M0337_2550"
+    start_date = "2021-06-30"
+    end_date = "2022-06-30"
+    panel = align_nav_panel(load_nav_panel([first_proj_id, second_proj_id]))
+    selected = panel.loc[start_date:end_date, [first_proj_id, second_proj_id]]
+    assert len(selected.dropna(how="any")) >= 12, "The bounded SEC integration fixture no longer has a 12-month overlap."
+    return first_proj_id, second_proj_id, start_date, end_date
 
 
 def create_sample_backtest() -> dict:

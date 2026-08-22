@@ -7,7 +7,7 @@ from pathlib import Path
 import httpx
 import pandas as pd
 
-from backend.app.sec.cache import write_manifest, write_parquet
+from backend.app.sec.cache import deduplicate_nav_frame, write_manifest, write_parquet
 from backend.app.sec.client import SecOpenDataClient
 from backend.app.sec.endpoints import FUND_DAILY_NAV
 from backend.app.sec.normalizers import normalize_daily_nav_record, records
@@ -56,6 +56,13 @@ def fetch_with_retry(client: SecOpenDataClient, params: dict) -> tuple[str, obje
 def raw_file_for(raw_dir: Path, proj_id: str, page_no: int) -> Path:
     safe_proj_id = "".join(ch if ch.isalnum() or ch in ("-", "_") else "_" for ch in proj_id)
     return raw_dir / f"{safe_proj_id}_{page_no:04d}.json"
+
+
+def actual_nav_start(nav_rows: list[dict]) -> str:
+    """Return the first observed NAV date, or the requested start if empty."""
+    if not nav_rows:
+        return START_DATE.isoformat()
+    return pd.Timestamp(pd.to_datetime([row["nav_date"] for row in nav_rows]).min()).date().isoformat()
 
 
 def normalize_page_records(
@@ -157,6 +164,7 @@ def main():
                 break
             time.sleep(BASE_SLEEP_SECONDS)
 
+    nav_rows = deduplicate_nav_frame(pd.DataFrame(nav_rows)).to_dict(orient="records")
     write_parquet("daily_nav", nav_rows)
     write_parquet("fund_classes", funds)
     write_parquet("nav_request_ledger", ledger_rows)
@@ -167,7 +175,8 @@ def main():
     manifest = {
         "source": "SEC Open Data",
         "endpoint": FUND_DAILY_NAV,
-        "start": START_DATE.isoformat(),
+        "start": actual_nav_start(nav_rows),
+        "requested_start": START_DATE.isoformat(),
         "end": end_date.isoformat(),
         "raw_dir": str(raw_dir),
         "fund_count": len(funds),

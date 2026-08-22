@@ -39,7 +39,7 @@ test("select funds -> set assumptions -> run -> view results", async ({ page }) 
   // client-side guard (assertSecOnly) would have thrown before rendering
   // anything if the API ever returned another data source, but assert the
   // ending value is a real, non-placeholder number as a second signal.
-  await expect(endingValueCard).toContainText("$");
+  await expect(endingValueCard).toContainText("THB");
 });
 
 test("URL updates with a shareable run id, and reloading it reproduces the result", async ({ page, browser }) => {

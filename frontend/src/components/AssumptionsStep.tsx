@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Play } from "lucide-react";
+import { hasCachedNavHistory } from "../types/backtest";
 import type { BacktestRequest, SecFund } from "../types/backtest";
 
 interface Props {
@@ -143,7 +144,9 @@ export function AssumptionsStep({
               value={request.benchmark_proj_id}
             >
               {funds.map((fund) => (
-                <option key={`${fund.proj_id}-${fund.fund_class_name}`} value={fund.proj_id}>{fund.display_name}</option>
+                <option disabled={!hasCachedNavHistory(fund)} key={`${fund.proj_id}-${fund.fund_class_name}`} value={fund.proj_id}>
+                  {fund.display_name}{hasCachedNavHistory(fund) ? "" : " (No cached NAV history)"}
+                </option>
               ))}
             </select>
             {fieldError("benchmark") ? <div className="field-error">{fieldError("benchmark")}</div> : null}
@@ -254,10 +257,16 @@ export function AssumptionsStep({
           ) : null}
         </div>
 
-        <div className={advancedOpen ? "advanced-toggle open" : "advanced-toggle"} onClick={() => setAdvancedOpen((open) => !open)}>
+        <button
+          aria-controls="advanced-settings"
+          aria-expanded={advancedOpen}
+          className={advancedOpen ? "advanced-toggle open" : "advanced-toggle"}
+          onClick={() => setAdvancedOpen((open) => !open)}
+          type="button"
+        >
           <span className="chev">&#9654;</span> Advanced settings
-        </div>
-        <div className={advancedOpen ? "advanced-body open" : "advanced-body"}>
+        </button>
+        <div className={advancedOpen ? "advanced-body open" : "advanced-body"} id="advanced-settings">
           <div className="form-grid">
             <div className="form-field">
               <label htmlFor="riskFreeRate">Risk-free rate (% / yr)</label>

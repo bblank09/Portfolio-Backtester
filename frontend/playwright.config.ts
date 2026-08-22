@@ -5,17 +5,19 @@ import { defineConfig, devices } from "@playwright/test";
 // deployment (see backend/app/main.py's static-serving block) -- rather than
 // through Vite's dev server. Run `npm run build` before `npm run test:e2e`.
 //
-// KNOWN FLAKE (documented, not silently retried away): the second test
-// ("URL updates with a shareable run id...") intermittently fails to see
-// the reloaded page's UI update within the timeout, even against this
-// production build. Investigated extensively: debug logging confirmed the
-// app's own code runs correctly every single time in the failing case too
-// (the fetch succeeds, the response contains correct data, and setResult()
-// is called with it) -- the failure is that the browser never paints the
-// resulting DOM change in time under Playwright's CDP automation. It has
-// never reproduced under manual/real browser use. Root cause unresolved;
-// retries mitigate it without hiding a real regression (an actual app bug
-// would fail deterministically, not ~1 time in 4-8 runs).
+// The second test ("URL updates with a shareable run id...") was previously
+// documented here as an unresolved CDP paint-timing flake. That diagnosis
+// was wrong: it was a real race in BacktestWorkspace.tsx. Opening a shared
+// `?run=` link starts two independent fetches -- the full funds list and
+// the one saved run -- and PortfolioStep's "seed two example funds on first
+// load" convenience effect fired as soon as the (much larger, slower) funds
+// list resolved, regardless of whether a shared run had already loaded. Its
+// onAssetsChange call routes through updateRequest(), which unconditionally
+// clears `result` -- wiping out the just-loaded shared run. Since the funds
+// list reliably takes longer than fetching one run, this lost the race
+// almost every time rather than being genuinely flaky. Fixed by passing
+// `skipAutoSeed` down to PortfolioStep when the page was opened as a shared
+// link (see BacktestWorkspace.tsx).
 export default defineConfig({
   testDir: "./e2e",
   timeout: 30_000,
@@ -33,7 +35,7 @@ export default defineConfig({
     }
   ],
   webServer: {
-    command: "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3 -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8001",
+    command: "python3 -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8001",
     url: "http://127.0.0.1:8001/api/health",
     reuseExistingServer: true,
     cwd: "..",

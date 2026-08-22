@@ -1,11 +1,12 @@
 {
   "source": "SEC Open Data",
   "endpoint": "/v2/fund/daily-info/nav",
-  "start": "2015-01-01",
+  "start": "2015-01-05",
+  "requested_start": "2015-01-01",
   "end": "2026-08-03",
   "raw_dir": "data/sec/raw/daily_nav/20260803_192603",
   "fund_count": 2000,
-  "nav_rows": 2400313,
+  "nav_rows": 2399128,
   "request_count": 37487,
   "status_counts": {
     "success": 37487

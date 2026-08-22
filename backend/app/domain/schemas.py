@@ -1,7 +1,8 @@
+import math
 from datetime import date
 from typing import Any
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .enums import (
     AlignmentFrequency,
@@ -9,18 +10,34 @@ from .enums import (
     CashflowType,
     DataSource,
     Frequency,
+    Objective,
     PriceField,
     RebalanceMode,
 )
 
 
-class SecFundAllocation(BaseModel):
+class FiniteNumberModel(BaseModel):
+    @field_validator("*", mode="before")
+    @classmethod
+    def reject_non_finite_numbers(cls, value: Any) -> Any:
+        if value is None or isinstance(value, bool):
+            return value
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return value
+        if not math.isfinite(numeric):
+            raise ValueError("numeric values must be finite")
+        return value
+
+
+class SecFundAllocation(FiniteNumberModel):
     proj_id: str = Field(min_length=1)
     display_name: str = Field(min_length=1)
     weight: float = Field(ge=0, le=100)
 
 
-class CashflowRule(BaseModel):
+class CashflowRule(FiniteNumberModel):
     enabled: bool
     type: CashflowType = CashflowType.contribution
     amount: float = Field(ge=0)
@@ -28,24 +45,25 @@ class CashflowRule(BaseModel):
     timing: CashflowTiming = CashflowTiming.end
 
 
-class RebalanceRule(BaseModel):
+class RebalanceRule(FiniteNumberModel):
     mode: RebalanceMode = RebalanceMode.annual
     threshold_pct: float = Field(default=5.0, gt=0)
 
 
-class CostAssumptions(BaseModel):
+class CostAssumptions(FiniteNumberModel):
     transaction_bps: float = Field(ge=0)
     slippage_bps: float = Field(ge=0)
     annual_drag_pct: float = Field(ge=0)
 
 
-class DataAssumptions(BaseModel):
+class DataAssumptions(FiniteNumberModel):
     source: DataSource = DataSource.sec_open_data
     price_field: PriceField = PriceField.nav_per_unit
     frequency: AlignmentFrequency = AlignmentFrequency.monthly
 
 
-class BacktestRequest(BaseModel):
+class BacktestRequest(FiniteNumberModel):
+    objective: Objective = Objective.past_performance
     assets: list[SecFundAllocation] = Field(min_length=1, max_length=20)
     start_date: date
     end_date: date
@@ -79,8 +97,9 @@ class BacktestRequest(BaseModel):
         return self
 
 
-class MetricSummary(BaseModel):
+class MetricSummary(FiniteNumberModel):
     ending_value: float
+    twrr: float
     irr: float | None = None
     twrr_cagr: float
     volatility: float
@@ -91,33 +110,59 @@ class MetricSummary(BaseModel):
     var_99: float | None = None
     max_drawdown: float
     benchmark_excess_return: float | None = None
+    cashflow_count: int = 0
+    rebalance_count: int = 0
+    total_contributed: float = 0.0
+    total_withdrawn: float = 0.0
+    total_costs: float = 0.0
 
 
-class TimeSeriesPoint(BaseModel):
+class RebalancingComparison(FiniteNumberModel):
+    baseline_summary: MetricSummary
+    deltas: dict[str, float]
+
+    @field_validator("deltas")
+    @classmethod
+    def deltas_must_be_finite(cls, value: dict[str, float]) -> dict[str, float]:
+        if any(not math.isfinite(number) for number in value.values()):
+            raise ValueError("comparison deltas must be finite")
+        return value
+
+
+class TimeSeriesPoint(FiniteNumberModel):
     date: date
     value: float
 
 
-class TableSection(BaseModel):
+class TableSection(FiniteNumberModel):
     title: str
     rows: list[dict[str, Any]]
 
 
-class QualityIssue(BaseModel):
+class QualityIssue(FiniteNumberModel):
     code: str
     message: str
     severity: str = "warning"
 
 
-class BacktestResult(BaseModel):
+class BacktestResult(FiniteNumberModel):
+    run_id: str = ""
+    created_at: str = ""
+    data_source: DataSource = DataSource.sec_open_data
     request: BacktestRequest
     summary: MetricSummary
     equity_curve: list[TimeSeriesPoint]
     benchmark_curve: list[TimeSeriesPoint]
     drawdown_curve: list[TimeSeriesPoint]
-    monthly_returns: TableSection
+    period_returns: TableSection | None = None
+    # Compatibility with runs persisted before the frequency-neutral contract.
+    monthly_returns: TableSection | None = None
     annual_returns: TableSection
     risk_metrics: TableSection
     diversification: TableSection
     asset_metrics: TableSection
     quality_issues: list[QualityIssue]
+    cashflows: list[dict[str, Any]] = Field(default_factory=list)
+    rebalances: list[dict[str, Any]] = Field(default_factory=list)
+    rolling_correlation: list[dict[str, Any]] = Field(default_factory=list)
+    rebalancing_comparison: RebalancingComparison | None = None

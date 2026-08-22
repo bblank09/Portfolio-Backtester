@@ -105,10 +105,10 @@ Required:
 - Start date
 - End date
 - Initial capital
+- Benchmark fund
 
 Optional:
 
-- Benchmark fund
 - Rebalancing mode
 - Costs
 - Risk-free rate
@@ -163,10 +163,10 @@ Required:
 - Start date
 - End date
 - Starting capital
+- Benchmark fund
 
 Optional:
 
-- Benchmark fund
 - Rebalancing mode
 - Costs
 - Risk-free rate
@@ -217,10 +217,10 @@ Required:
 - Start date
 - End date
 - Rebalancing mode
+- Benchmark fund
 
 Optional:
 
-- Benchmark fund
 - Transaction cost
 - Slippage
 - Annual drag
