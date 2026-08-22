@@ -34,6 +34,13 @@ export function BacktestWorkspace() {
   const [currentStep, setCurrentStep] = useState(0);
   const [unlockedStep, setUnlockedStep] = useState(0);
   const [linkCopied, setLinkCopied] = useState(false);
+  // Captured once at mount (not recomputed later, e.g. after copyShareLink
+  // rewrites the URL) -- true only when the page was opened as a shared
+  // link. PortfolioStep's "seed an example portfolio" convenience must not
+  // fire in that case: it races the shared run's own fetch, and since the
+  // funds list is a much bigger payload than one saved run, it reliably
+  // wins and overwrites the just-loaded shared result with demo funds.
+  const [openedAsSharedRun] = useState(() => new URLSearchParams(window.location.search).has("run"));
   const [theme, setTheme] = useState<"light" | "dark">(() => (localStorage.getItem("pb-theme") === "dark" ? "dark" : "light"));
 
   useEffect(() => {
@@ -221,6 +228,7 @@ export function BacktestWorkspace() {
           funds={funds}
           onAssetsChange={handleAssetsChange}
           onContinue={() => advanceTo(1)}
+          skipAutoSeed={openedAsSharedRun}
         />
         <AssumptionsStep
           active={currentStep === 1}

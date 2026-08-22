@@ -68,6 +68,11 @@ interface Props {
   active: boolean;
   onAssetsChange: (assets: SecFundAllocation[]) => void;
   onContinue: () => void;
+  // Suppress the "seed two example funds on first load" convenience. Set
+  // when the page was opened as a shared run link -- that link's own
+  // request/result load must not be clobbered by an unrelated demo seed
+  // that fires as soon as the (much larger, slower) funds list resolves.
+  skipAutoSeed?: boolean;
 }
 
 const PALETTE = ["#5b21d6", "#34383e", "#92620a", "#9aa1ac", "#7c4ded"];
@@ -78,7 +83,7 @@ function nextKey() {
   return `row-${rowSeq}`;
 }
 
-export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Props) {
+export function PortfolioStep({ funds, active, onAssetsChange, onContinue, skipAutoSeed }: Props) {
   const [rows, setRows] = useState<Row[]>([{ key: nextKey(), projId: "", weight: 0, query: "" }]);
   const [amcFilter, setAmcFilter] = useState<Set<string>>(new Set());
   const [categoryFilter, setCategoryFilter] = useState<Set<string>>(new Set());
@@ -120,7 +125,7 @@ export function PortfolioStep({ funds, active, onAssetsChange, onContinue }: Pro
   }
 
   useEffect(() => {
-    if (seededRef.current || funds.length < 2) return;
+    if (seededRef.current || funds.length < 2 || skipAutoSeed) return;
     seededRef.current = true;
     const availableFunds = funds.filter(hasCachedNavHistory);
     if (availableFunds.length < 2) return;
