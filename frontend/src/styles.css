@@ -262,6 +262,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 /* ---------- Holdings / portfolio builder ---------- */
 .holdings-table { display: flex; flex-direction: column; gap: 10px; }
 .holdings-head, .holdings-row { display: grid; grid-template-columns: 1fr 110px 34px; gap: 10px; align-items: center; }
+.holdings-row { align-items: start; }
 .holdings-head { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--text-secondary); padding: 0 2px; }
 @media (max-width: 520px) {
   .holdings-head { display: none; }
@@ -276,6 +277,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .field { border: 1px solid var(--border-strong); border-radius: var(--r-sm); padding: 8px 10px; background: var(--surface-2); color: var(--text-primary); width: 100%; }
 .field:focus { outline: none; box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--accent); border-color: var(--accent); }
 .field.num { font-variant-numeric: tabular-nums; }
+.field.num::-webkit-outer-spin-button,
+.field.num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.field.num[type="number"] { -moz-appearance: textfield; }
 .fund-field { position: relative; }
 .fund-field .field { padding-right: 30px; }
 .fund-suggest {
